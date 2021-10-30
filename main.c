@@ -1,3 +1,9 @@
+#define MAX_FILENAMES	50
+#define MAX_FILENAMES_S	"50"
+#define MAX_SECTOIN	20
+#define MAX_SECTOIN_S	"20"
+
+//----------------------------------------------------------------
 #include <stdio.h>
 #include <string.h>
 #include <stdint.h>
@@ -8,6 +14,8 @@
 #include <windows.h>
 
 //----------------------------------------------------------------
+#pragma region // макросы для совместимости между unix и windows
+
 #ifdef __unix__
 #	include <unistd.h>
 #	include <getopt.h>
@@ -32,6 +40,8 @@
 #define NO_RETURN __declspec(noreturn) void
 #endif
 
+#pragma endregion
+
 //----------------------------------------------------------------
 #define FATAL(x) do { perror( x); exit( EXIT_FAILURE); } while (0)
 #define FATALMSG( x, errmsg) do { fprintf( stderr, "%s: " errmsg "\n", (x) ); exit( EXIT_FAILURE); } while (0)
@@ -39,7 +49,7 @@
 #define PS(x) (x), SIZE(x)
 
 //----------------------------------------------------------------
-int hexoutput = 1;
+int radix = 1;
 const char* outfmt[][2] =
 { { "%-8.8s% 10u % 10u% 10u% 10u  "	, "%-9.8s % 8X   % 8X  % 8X  % 8X  "	}
 , { "%s:\t%u\n"				, "%s:\t%X\n"				}
@@ -48,7 +58,7 @@ const char* outfmt[][2] =
 //----------------------------------------------------------------
 NO_RETURN usage( const char* cmd )
 {
-	// ���� � ������ basename'�...
+	// нету в студии basename'а...
 	size_t cmdlen = strlen( cmd );
 	cmd += cmdlen;
 	for( ; cmdlen > 0; --cmdlen )
@@ -173,19 +183,19 @@ IMAGE_NT_HEADERS* load_NT_headers( const char* filename, char buf[], const size_
 	IMAGE_DOS_HEADER *image_dos_header = (IMAGE_DOS_HEADER*) buf;
 
 	if( image_dos_header->e_magic != IMAGE_DOS_SIGNATURE )
-		FATALMSG( filename, "Invalid Dos Header" );
+		FATALMSG( filename, "Invalid DOS header" );
 
 	IMAGE_NT_HEADERS* image_NT_headers = (IMAGE_NT_HEADERS*)
 		( buf + image_dos_header->e_lfanew );
 
 	if( image_NT_headers->Signature != IMAGE_NT_SIGNATURE )
-		FATALMSG( filename, "Invalid PE Header" );
+		FATALMSG( filename, "Invalid PE header" );
 
 	return image_NT_headers;
 }
 
 //----------------------------------------------------------------
-void print_section_table( const char* filename )
+void print_max_info( const char* filename )
 {
 	char buf[4096];
 	IMAGE_NT_HEADERS*	image_NT_headers	= load_NT_headers( filename, PS( buf ) );
@@ -197,7 +207,7 @@ void print_section_table( const char* filename )
 	      );
 	for( WORD i = 0; i < image_NT_headers->FileHeader.NumberOfSections; i++ )
 	{
-		printf	( outfmt[0][hexoutput] //"%-9.8s % 8X   % 8X  % 8X  % 8X  "
+		printf	( outfmt[0][radix] //"%-9.8s % 8X   % 8X  % 8X  % 8X  "
 			, image_section_header[i].Name
 			, image_section_header[i].VirtualAddress
 			, image_section_header[i].Misc.VirtualSize
@@ -211,27 +221,68 @@ void print_section_table( const char* filename )
 }
 
 //----------------------------------------------------------------
-void print_code_size( const char* filename )
+size_t section_names_len	= 0;
+size_t files_len		= 0;
+uint64_t							section_names	[ MAX_SECTOIN	] = { 0 };
+struct { DWORD VirtualSize[ MAX_SECTOIN]; const char* name; }	files		[ MAX_FILENAMES	] = { 0 };
+
+//----------------------------------------------------------------
+void mem_sections_size( const char* filename )
 {
 	char buf[4096];
-	IMAGE_NT_HEADERS*	image_NT_headers	= load_NT_headers( filename, PS( buf ) );
-	IMAGE_SECTION_HEADER*	image_section_header	= IMAGE_FIRST_SECTION( image_NT_headers );
+	IMAGE_NT_HEADERS* image_NT_headers = load_NT_headers( filename, PS( buf ) );
+	IMAGE_SECTION_HEADER* image_section_header = IMAGE_FIRST_SECTION( image_NT_headers );
 
-	DWORD code_size = 0;
-	for( WORD i = 0; i < image_NT_headers->FileHeader.NumberOfSections; i++ )
+	if( files_len >= SIZE( files ) )
+		FATALMSG( filename, "Too many files (more " MAX_FILENAMES_S ")" );
+
+	files[files_len].name = filename;
+
+	for( WORD s = 0; s < image_NT_headers->FileHeader.NumberOfSections; s++ )
 	{
-		DWORD  flags = image_section_header[i].Characteristics;
-		if(    flags & IMAGE_SCN_MEM_EXECUTE
-		  &&   flags & IMAGE_SCN_CNT_CODE
-		  && !(flags & IMAGE_SCN_CNT_UNINITIALIZED_DATA)
-		  )
+		// ищем колонку с именем section_name
+		const uint64_t section_name = *((uint64_t*) image_section_header[s].Name);
+		for( size_t n = 0; n < section_names_len; n++ )
 		{
-			code_size += image_section_header[i].Misc.VirtualSize;
+			if( section_name == section_names[n] )
+			{
+				files[files_len].VirtualSize[n] = image_section_header[s].Misc.VirtualSize;
+				goto next_s;
+			}
 		}
+
+		// добавляем новую колонку
+		if( section_names_len >= SIZE( section_names ) )
+			FATALMSG( filename, "Too many section headers in the file (more " MAX_SECTOIN_S ")" );
+		section_names			[ section_names_len] = section_name;
+		files[ files_len].VirtualSize	[ section_names_len] = image_section_header[s].Misc.VirtualSize;
+		section_names_len++;
+
+	next_s:;
 	}
-	printf	( outfmt[1][hexoutput] //"%s:\t%u\n"
-		, filename, code_size
-		);
+
+	files_len++;
+}
+
+//----------------------------------------------------------------
+NO_RETURN print_sections_size()
+{
+	if( !files_len )
+		exit( 0 );
+
+	// печатаем заголовок таблицы
+	for( size_t col = 0; col < section_names_len; col++ )
+		printf( "%9.8s", (char *) &(section_names[ col]) );
+	printf( " filename\n" );
+
+	// печатаем таблицу
+	for( size_t row = 0; row < files_len; row++ )
+	{
+		for( size_t col = 0; col < section_names_len; col++ )
+			printf( "% 9X", files[row].VirtualSize[col] );
+		printf( " %s\n", files[row].name );
+	}
+	exit( 0 );
 }
 
 //----------------------------------------------------------------
@@ -245,19 +296,19 @@ int main( int argc, const char* argv[] )
 
 	while( 1)
 	{
-		switch( getopt( argc, argv, "hdxT:s:" ) )
+		switch( getopt( argc, argv, "hodxm:" ) )
 		{
 		case -1:
 			for( int i = optind; i < argc; i++ )
-				print_code_size( argv[i] );
-			exit( 0 );
-								break;
-		case 'd': hexoutput = 0;			break;
-		case 'x': hexoutput = 1;			break;
-		case 'T': print_section_table	( optarg );	break;
-		case 's': print_code_size	( optarg );	break;
-		case 'h': usage( cmd );				break;
-		default	: usage( cmd );				break;
+				mem_sections_size( argv[i] );
+			print_sections_size();
+							break;
+		case 'o': radix = 0;			break;
+		case 'd': radix = 0;			break;
+		case 'x': radix = 1;			break;
+		case 'm': print_max_info( optarg );	break;
+		case 'h': usage( cmd );			break;
+		default	: usage( cmd );			break;
 		}
 	}
 }
