@@ -9,9 +9,9 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <locale.h>
-#include <ctype.h>
 #include <fcntl.h>
 #include <windows.h>
+#include <iostream>
 #include "constexpr_lowercase.h"
 
 //----------------------------------------------------------------
@@ -84,6 +84,19 @@ NO_RETURN usage( const char* cmd )
 	exit( 1);
 }
 
+#pragma region // class Flags
+
+//----------------------------------------------------------------
+class Flags
+{
+	typedef struct { DWORD val; const char* name; } Names;
+	static const Names names[];
+	DWORD val;
+public:
+	void print( std::ostream& output ) const;
+};
+//inline std::istream& operator>>( std::istream& input, Flags& s ) { s.read( input ); return input; }	
+inline std::ostream& operator<<( std::ostream& output, const Flags& s ) { s.print( output ); return output; }
 
 //----------------------------------------------------------------
 #define CONSTEXPR_TOLOWER1( stringLiteral)										\
@@ -100,62 +113,79 @@ NO_RETURN usage( const char* cmd )
 	return a;													\
 }()
 
-#define IMAGE_SCN(x,y,z) IMAGE_SCN_##y, CONSTEXPR_TOLOWER1(#y)
+#define IMAGE_SCN_TYPE_REG		0x00000000  // Reserved.
+#define IMAGE_SCN_TYPE_NOLOAD		0x00000002  // Reserved.
+#define IMAGE_SCN_TYPE_GROUP		0x00000004  // Reserved.
+#define IMAGE_SCN_TYPE_COPY		0x00000010  // Reserved.
+#define IMAGE_SCN_TYPE_OVER		0x00000400  // Reserved.
+#define IMAGE_SCN_0x00002000		0x00002000  // Reserved.
+#define IMAGE_SCN_MEM_PROTECTED		0x00004000  // Obsolete
+#define IMAGE_SCN_MEM_SYSHEAP		0x00010000  // Obsolete
+
+#define IMAGE_SCN(x) { IMAGE_SCN_##x, CONSTEXPR_TOLOWER1(#x) }
+
+const Flags::Names Flags::names[] =
+{ IMAGE_SCN( TYPE_REG			)
+, IMAGE_SCN( SCALE_INDEX		) // 0x00000001  // Tls index is scaled
+//, IMAGE_SCN( TYPE_DSECT		) // 0x00000001  // Reserved.
+, IMAGE_SCN( TYPE_NOLOAD		)
+, IMAGE_SCN( TYPE_GROUP			)
+, IMAGE_SCN( TYPE_NO_PAD		)
+, IMAGE_SCN( TYPE_COPY			)
+
+, IMAGE_SCN( CNT_INITIALIZED_DATA	)
+, IMAGE_SCN( CNT_UNINITIALIZED_DATA	)
+
+, IMAGE_SCN( LNK_INFO			)
+, IMAGE_SCN( TYPE_OVER			)
+, IMAGE_SCN( LNK_REMOVE			)
+, IMAGE_SCN( LNK_COMDAT			)
+
+, IMAGE_SCN( MEM_PROTECTED		)
+, IMAGE_SCN( NO_DEFER_SPEC_EXC		)
+, IMAGE_SCN( GPREL			)
+, IMAGE_SCN( MEM_FARDATA		)
+, IMAGE_SCN( MEM_SYSHEAP		)
+, IMAGE_SCN( MEM_PURGEABLE		)
+, IMAGE_SCN( MEM_16BIT			)
+, IMAGE_SCN( MEM_LOCKED			)
+, IMAGE_SCN( MEM_PRELOAD		)
+
+, IMAGE_SCN( ALIGN_2BYTES		)
+, IMAGE_SCN( ALIGN_4BYTES		)
+, IMAGE_SCN( ALIGN_8BYTES		)
+, IMAGE_SCN( ALIGN_16BYTES		)
+, IMAGE_SCN( ALIGN_32BYTES		)
+, IMAGE_SCN( ALIGN_64BYTES		)
+, IMAGE_SCN( ALIGN_128BYTES		)
+, IMAGE_SCN( ALIGN_256BYTES		)
+, IMAGE_SCN( ALIGN_512BYTES		)
+, IMAGE_SCN( ALIGN_1024BYTES		)
+, IMAGE_SCN( ALIGN_2048BYTES		)
+, IMAGE_SCN( ALIGN_4096BYTES		)
+, IMAGE_SCN( ALIGN_8192BYTES		)
+, IMAGE_SCN( ALIGN_MASK			)
+
+, IMAGE_SCN( MEM_DISCARDABLE		)
+, IMAGE_SCN( MEM_NOT_CACHED		)
+, IMAGE_SCN( MEM_NOT_PAGED		)
+, IMAGE_SCN( MEM_SHARED			)
+, IMAGE_SCN( MEM_EXECUTE		)
+, IMAGE_SCN( MEM_READ			)
+, IMAGE_SCN( MEM_WRITE			)
+};
 
 //----------------------------------------------------------------
-void print_flags( DWORD section_flags)
+void Flags::print(std::ostream& output) const
 {
-	static const struct { DWORD value; const char* name; }
-	scn[] =
-	{ { IMAGE_SCN( 0x00000020, CNT_CODE,		"Section contains code"				) }
-	, { IMAGE_SCN( 0x00000040, CNT_INITIALIZED_DATA,"Section contains initialized data"		) }
-	, { IMAGE_SCN( 0x00000080, CNT_UNINITIALIZED_DATA,"Section contains uninitialized data"		) }
-	, { IMAGE_SCN( 0x00000100, LNK_OTHER,		"Reserved"					) }
-	, { IMAGE_SCN( 0x00000200, LNK_INFO,		"Section contains comments or some other type of information") }
-	//, { IMAGE_SCN( 0x00000400, TYPE_OVER,		"Reserved"					) }
-	, { IMAGE_SCN( 0x00000800, LNK_REMOVE,		"Section contents will not become part of image") }
-	, { IMAGE_SCN( 0x00001000, LNK_COMDAT,		"Section contents comdat"			) }
-	//, { IMAGE_SCN( 0x00002000, 0x00002000,	"Reserved"					) }
-	//, { IMAGE_SCN( 0x00004000, MEM_PROTECTED,	"Obsolete"					) }
-	, { IMAGE_SCN( 0x00004000, NO_DEFER_SPEC_EXC,	"Reset speculative exceptions handling bits in the TLB entries for this section") }
-	, { IMAGE_SCN( 0x00008000, GPREL,		"Section content can be accessed relative to GP") }
-	, { IMAGE_SCN( 0x00008000, MEM_FARDATA,		""						) }
-	//, { IMAGE_SCN( 0x00010000, MEM_SYSHEAP,	"Obsolete"					) }
-	, { IMAGE_SCN( 0x00020000, MEM_PURGEABLE,	""						) }
-	, { IMAGE_SCN( 0x00020000, MEM_16BIT,		""						) }
-	, { IMAGE_SCN( 0x00040000, MEM_LOCKED,		""						) }
-	, { IMAGE_SCN( 0x00080000, MEM_PRELOAD,		""						) }
-	, { IMAGE_SCN( 0x00100000, ALIGN_1BYTES,	"Default alignment if no others are specified"	) }
-	, { IMAGE_SCN( 0x00200000, ALIGN_2BYTES,	"Default alignment if no others are specified"	) }
-	, { IMAGE_SCN( 0x00300000, ALIGN_4BYTES,	"Default alignment if no others are specified"	) }
-	, { IMAGE_SCN( 0x00400000, ALIGN_8BYTES,	"Default alignment if no others are specified"	) }
-	, { IMAGE_SCN( 0x00500000, ALIGN_16BYTES,	"Default alignment if no others are specified"	) }
-	, { IMAGE_SCN( 0x00600000, ALIGN_32BYTES,	"Default alignment if no others are specified"	) }
-	, { IMAGE_SCN( 0x00700000, ALIGN_64BYTES,	"Default alignment if no others are specified"	) }
-	, { IMAGE_SCN( 0x00800000, ALIGN_128BYTES,	"Default alignment if no others are specified"	) }
-	, { IMAGE_SCN( 0x00900000, ALIGN_256BYTES,	"Default alignment if no others are specified"	) }
-	, { IMAGE_SCN( 0x00A00000, ALIGN_512BYTES,	"Default alignment if no others are specified"	) }
-	, { IMAGE_SCN( 0x00B00000, ALIGN_1024BYTES,	"Default alignment if no others are specified"	) }
-	, { IMAGE_SCN( 0x00C00000, ALIGN_2048BYTES,	"Default alignment if no others are specified"	) }
-	, { IMAGE_SCN( 0x00D00000, ALIGN_4096BYTES,	"Default alignment if no others are specified"	) }
-	, { IMAGE_SCN( 0x00E00000, ALIGN_8192BYTES,	"Default alignment if no others are specified"	) }
-	//, { IMAGE_SCN( 0x00F00000, 0x00F00000,	"Unused"					) }
-	, { IMAGE_SCN( 0x01000000, LNK_NRELOC_OVFL,	"Section contains extended relocations"		) }
-	, { IMAGE_SCN( 0x02000000, MEM_DISCARDABLE,	"Section can be discarded"			) }
-	, { IMAGE_SCN( 0x04000000, MEM_NOT_CACHED,	"Section is not cachable"			) }
-	, { IMAGE_SCN( 0x08000000, MEM_NOT_PAGED,	"Section is not pageable"			) }
-	, { IMAGE_SCN( 0x10000000, MEM_SHARED,		"Section is shareable"				) }
-	, { IMAGE_SCN( 0x20000000, MEM_EXECUTE,		"Section is executable"				) }
-	, { IMAGE_SCN( 0x40000000, MEM_READ,		"Section is readable"				) }
-	, { IMAGE_SCN( 0x80000000, MEM_WRITE,		"Section is writeable"				) }
-	};
-
-	for( int i = 0; i < SIZE( scn ); i++ )
+	for( int i = 0; i < SIZE( names ); i++ )
 	{
-		if( scn[i].value & section_flags )
-			printf( "%s ", scn[i].name );
+		if( names[i].val & val )
+			output << names[i].name << ' ';
 	}
 }
+
+#pragma endregion
 
 //----------------------------------------------------------------
 inline int is_minus( const char* s )
@@ -191,7 +221,7 @@ IMAGE_NT_HEADERS* load_NT_headers( const char* filename, char buf[], const size_
 		( buf + image_dos_header->e_lfanew );
 
 	if( image_NT_headers->Signature != IMAGE_NT_SIGNATURE )
-		FATALMSG( filename, "Invalid PE header" );
+		FATALMSG( filename, "Invalid Portable Executable header" );
 
 	return image_NT_headers;
 }
@@ -216,7 +246,9 @@ void print_max_info( const char* filename )
 			, image_section_header[i].PointerToRawData
 			, image_section_header[i].SizeOfRawData
 			);
-		print_flags( image_section_header[i].Characteristics );
+
+		std::cout << *((Flags*) &(image_section_header[i].Characteristics ));
+
 		printf( "\n" );
 	}
 	printf( "\n" );
