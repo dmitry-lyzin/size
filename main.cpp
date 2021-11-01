@@ -12,6 +12,7 @@
 #include <ctype.h>
 #include <fcntl.h>
 #include <windows.h>
+#include "constexpr_lowercase.h"
 
 //----------------------------------------------------------------
 #pragma region // макросы для совместимости между unix и windows
@@ -83,8 +84,23 @@ NO_RETURN usage( const char* cmd )
 	exit( 1);
 }
 
-#define IMAGE_SCN(x,y,z) IMAGE_SCN_##y, #y
-#define XXXX( c0, c1, c2, c3) (((c3) << 24) + ((c2) << 16) + ((c1) << 8) + (c0))
+
+//----------------------------------------------------------------
+#define CONSTEXPR_TOLOWER1( stringLiteral)										\
+[] {															\
+	struct StringWrapper												\
+	{														\
+		const char* value = (stringLiteral);									\
+	};														\
+	constexpr auto a =												\
+	LowerCaseStringHelper< StringWrapper, std::make_index_sequence< sizeof(stringLiteral)> >::Type::value;		\
+	if( a[0] == 'c' && a[1] == 'n' && a[2] == 't' && a[3] == '_') return a + 4;					\
+	if( a[0] == 'l' && a[1] == 'n' && a[2] == 'k' && a[3] == '_') return a + 4;					\
+	if( a[0] == 'm' && a[1] == 'e' && a[2] == 'm' && a[3] == '_') return a + 4;					\
+	return a;													\
+}()
+
+#define IMAGE_SCN(x,y,z) IMAGE_SCN_##y, CONSTEXPR_TOLOWER1(#y)
 
 //----------------------------------------------------------------
 void print_flags( DWORD section_flags)
@@ -137,21 +153,7 @@ void print_flags( DWORD section_flags)
 	for( int i = 0; i < SIZE( scn ); i++ )
 	{
 		if( scn[i].value & section_flags )
-		{
-			enum { CNT_ = XXXX('C','N','T','_'), LNK_ = XXXX('L','N','K','_'), MEM_ = XXXX('M','E','M','_') };
-			const char* name = scn[i].name;
-			DWORD name_prefix = *((DWORD*) name);
-			switch( name_prefix )
-			{
-			case CNT_:
-			case LNK_:
-			case MEM_:
-				name += sizeof( name_prefix);
-			}
-			while( *name )
-				putchar( tolower( *name++ ));
-			putchar( ' ' );
-		}
+			printf( "%s ", scn[i].name );
 	}
 }
 
