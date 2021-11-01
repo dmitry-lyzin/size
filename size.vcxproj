@@ -99,7 +99,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="getopt.c" />
-    <ClCompile Include="main.c" />
+    <ClCompile Include="main.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="getopt.h" />
