@@ -18,12 +18,13 @@
 template <char... STR>
 struct LowerCaseString
 {
-	static		constexpr const char				value[sizeof...(STR)] =
+	static constexpr const char value[sizeof...(STR)] =
 	{ ((STR >= 'A' && STR <= 'Z') ? STR + ('a' - 'A') : STR)... };
 };
 
 // Definition of member variable value.
-template <char... STR>	constexpr const char LowerCaseString <STR...>::	value[sizeof...(STR)];
+//template <char... STR>
+//		constexpr const char LowerCaseString <STR...>::value[sizeof...(STR)];
 
 
 
