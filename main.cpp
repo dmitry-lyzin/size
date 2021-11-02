@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <locale.h>
 #include <fcntl.h>
+#include <assert.h>
 #include <windows.h>
 #include <iostream>
 #include "constexpr_lowercase.h"
@@ -47,6 +48,7 @@
 #define FATAL(x) do { perror( x); exit( EXIT_FAILURE); } while (0)
 #define FATALMSG( x, errmsg) do { fprintf( stderr, "%s: " errmsg "\n", (x) ); exit( EXIT_FAILURE); } while (0)
 #define SIZE(x) (sizeof (x) / sizeof( *(x)))
+#define STRLEN(x) (sizeof (x) / sizeof( *(x)) - 1)
 #define PS(x) (x), SIZE(x)
 
 //----------------------------------------------------------------
@@ -84,15 +86,21 @@ NO_RETURN usage( const char* cmd )
 	exit( 1);
 }
 
+//================================================================
 #pragma region // class Flags
 
 //----------------------------------------------------------------
 class Flags
 {
-	typedef struct { DWORD val; const char* name; } Names;
-	static const Names names[];
 	DWORD val;
+
+	constexpr static const char separator[] = " ";
+	typedef struct { DWORD val; DWORD mask; const char* name; } Names;
+	static size_t names_len;
+	static Names  names[140];
 public:
+	const char* c_str() const;
+	operator const char* () const { return c_str(); };
 	void print( std::ostream& output ) const;
 };
 //inline std::istream& operator>>( std::istream& input, Flags& s ) { s.read( input ); return input; }	
@@ -108,12 +116,12 @@ inline std::ostream& operator<<( std::ostream& output, const Flags& s ) { s.prin
 	constexpr auto a =												\
 	LowerCaseStringHelper< StringWrapper, std::make_index_sequence< sizeof(stringLiteral)> >::Type::value;		\
 	if( a[0] == 'c' && a[1] == 'n' && a[2] == 't' && a[3] == '_') return a + 4;					\
-	if( a[0] == 'l' && a[1] == 'n' && a[2] == 'k' && a[3] == '_') return a + 4;					\
 	if( a[0] == 'm' && a[1] == 'e' && a[2] == 'm' && a[3] == '_') return a + 4;					\
 	return a;													\
 }()
 
 #define IMAGE_SCN_TYPE_REG		0x00000000  // Reserved.
+#define IMAGE_SCN_TYPE_DSECT		0x00000001  // Reserved.
 #define IMAGE_SCN_TYPE_NOLOAD		0x00000002  // Reserved.
 #define IMAGE_SCN_TYPE_GROUP		0x00000004  // Reserved.
 #define IMAGE_SCN_TYPE_COPY		0x00000010  // Reserved.
@@ -122,66 +130,134 @@ inline std::ostream& operator<<( std::ostream& output, const Flags& s ) { s.prin
 #define IMAGE_SCN_MEM_PROTECTED		0x00004000  // Obsolete
 #define IMAGE_SCN_MEM_SYSHEAP		0x00010000  // Obsolete
 
-#define IMAGE_SCN(x) { IMAGE_SCN_##x, CONSTEXPR_TOLOWER1(#x) }
+#define IMAGE_SCN1( x)		{ IMAGE_SCN_##x, IMAGE_SCN_##x,	CONSTEXPR_TOLOWER1(#x) }
+#define IMAGE_SCN2( x, mask)	{ IMAGE_SCN_##x, mask,		CONSTEXPR_TOLOWER1(#x) }
 
-const Flags::Names Flags::names[] =
-{ IMAGE_SCN( TYPE_REG			)
-, IMAGE_SCN( SCALE_INDEX		) // 0x00000001  // Tls index is scaled
-//, IMAGE_SCN( TYPE_DSECT		) // 0x00000001  // Reserved.
-, IMAGE_SCN( TYPE_NOLOAD		)
-, IMAGE_SCN( TYPE_GROUP			)
-, IMAGE_SCN( TYPE_NO_PAD		)
-, IMAGE_SCN( TYPE_COPY			)
-
-, IMAGE_SCN( CNT_INITIALIZED_DATA	)
-, IMAGE_SCN( CNT_UNINITIALIZED_DATA	)
-
-, IMAGE_SCN( LNK_INFO			)
-, IMAGE_SCN( TYPE_OVER			)
-, IMAGE_SCN( LNK_REMOVE			)
-, IMAGE_SCN( LNK_COMDAT			)
-
-, IMAGE_SCN( MEM_PROTECTED		)
-, IMAGE_SCN( NO_DEFER_SPEC_EXC		)
-, IMAGE_SCN( GPREL			)
-, IMAGE_SCN( MEM_FARDATA		)
-, IMAGE_SCN( MEM_SYSHEAP		)
-, IMAGE_SCN( MEM_PURGEABLE		)
-, IMAGE_SCN( MEM_16BIT			)
-, IMAGE_SCN( MEM_LOCKED			)
-, IMAGE_SCN( MEM_PRELOAD		)
-
-, IMAGE_SCN( ALIGN_2BYTES		)
-, IMAGE_SCN( ALIGN_4BYTES		)
-, IMAGE_SCN( ALIGN_8BYTES		)
-, IMAGE_SCN( ALIGN_16BYTES		)
-, IMAGE_SCN( ALIGN_32BYTES		)
-, IMAGE_SCN( ALIGN_64BYTES		)
-, IMAGE_SCN( ALIGN_128BYTES		)
-, IMAGE_SCN( ALIGN_256BYTES		)
-, IMAGE_SCN( ALIGN_512BYTES		)
-, IMAGE_SCN( ALIGN_1024BYTES		)
-, IMAGE_SCN( ALIGN_2048BYTES		)
-, IMAGE_SCN( ALIGN_4096BYTES		)
-, IMAGE_SCN( ALIGN_8192BYTES		)
-, IMAGE_SCN( ALIGN_MASK			)
-
-, IMAGE_SCN( MEM_DISCARDABLE		)
-, IMAGE_SCN( MEM_NOT_CACHED		)
-, IMAGE_SCN( MEM_NOT_PAGED		)
-, IMAGE_SCN( MEM_SHARED			)
-, IMAGE_SCN( MEM_EXECUTE		)
-, IMAGE_SCN( MEM_READ			)
-, IMAGE_SCN( MEM_WRITE			)
+constexpr int BEGIN__LINE__ = __LINE__;
+Flags::Names Flags::names[] =
+{ IMAGE_SCN2( TYPE_REG,		0xFFFFFFFF		) // 0x00000000  // Reserved.
+, IMAGE_SCN1( TYPE_DSECT				) // 0x00000001  // Reserved.
+, IMAGE_SCN1( TYPE_NOLOAD				) // 0x00000002  // Reserved.
+, IMAGE_SCN1( TYPE_GROUP				) // 0x00000004  // Reserved.
+, IMAGE_SCN1( TYPE_NO_PAD				) // 0x00000008  // Reserved.
+, IMAGE_SCN1( TYPE_COPY					) // 0x00000010  // Reserved.
+, IMAGE_SCN1( CNT_CODE					)
+, IMAGE_SCN1( CNT_INITIALIZED_DATA			)
+, IMAGE_SCN1( CNT_UNINITIALIZED_DATA			)
+, IMAGE_SCN1( LNK_OTHER					) // 0x00000100  // Reserved.
+, IMAGE_SCN1( LNK_INFO					)
+, IMAGE_SCN1( TYPE_OVER					) // 0x00000400  // Reserved.
+, IMAGE_SCN1( LNK_REMOVE				)
+, IMAGE_SCN1( LNK_COMDAT				)
+, IMAGE_SCN1( 0x00002000				) // 0x00002000  // Reserved.
+, IMAGE_SCN1( MEM_PROTECTED				) // 0x00004000  // Obsolete
+, IMAGE_SCN1( NO_DEFER_SPEC_EXC				)
+, IMAGE_SCN1( GPREL					)
+, IMAGE_SCN1( MEM_FARDATA				)
+, IMAGE_SCN1( MEM_SYSHEAP				) // 0x00010000  // Obsolete
+, IMAGE_SCN1( MEM_PURGEABLE				)
+, IMAGE_SCN1( MEM_16BIT					)
+, IMAGE_SCN1( MEM_LOCKED				)
+, IMAGE_SCN1( MEM_PRELOAD				)
+, IMAGE_SCN2( ALIGN_2BYTES,	IMAGE_SCN_ALIGN_MASK	)
+, IMAGE_SCN2( ALIGN_4BYTES,	IMAGE_SCN_ALIGN_MASK	)
+, IMAGE_SCN2( ALIGN_8BYTES,	IMAGE_SCN_ALIGN_MASK	)
+, IMAGE_SCN2( ALIGN_16BYTES,	IMAGE_SCN_ALIGN_MASK	)
+, IMAGE_SCN2( ALIGN_32BYTES,	IMAGE_SCN_ALIGN_MASK	)
+, IMAGE_SCN2( ALIGN_64BYTES,	IMAGE_SCN_ALIGN_MASK	)
+, IMAGE_SCN2( ALIGN_128BYTES,	IMAGE_SCN_ALIGN_MASK	)
+, IMAGE_SCN2( ALIGN_256BYTES,	IMAGE_SCN_ALIGN_MASK	)
+, IMAGE_SCN2( ALIGN_512BYTES,	IMAGE_SCN_ALIGN_MASK	)
+, IMAGE_SCN2( ALIGN_1024BYTES,	IMAGE_SCN_ALIGN_MASK	)
+, IMAGE_SCN2( ALIGN_2048BYTES,	IMAGE_SCN_ALIGN_MASK	)
+, IMAGE_SCN2( ALIGN_4096BYTES,	IMAGE_SCN_ALIGN_MASK	)
+, IMAGE_SCN2( ALIGN_8192BYTES,	IMAGE_SCN_ALIGN_MASK	)
+, IMAGE_SCN1( LNK_NRELOC_OVFL				)
+, IMAGE_SCN1( MEM_DISCARDABLE				)
+, IMAGE_SCN1( MEM_NOT_CACHED				)
+, IMAGE_SCN1( MEM_NOT_PAGED				)
+, IMAGE_SCN1( MEM_SHARED				)
+, IMAGE_SCN1( MEM_EXECUTE				)
+, IMAGE_SCN1( MEM_READ					)
+, IMAGE_SCN1( MEM_WRITE					)
+, IMAGE_SCN2( SCALE_INDEX,	0xFFFFFFFF		) // 0x00000001  // Tls index is scaled
 };
+// извратный способ посчитать длину ЗАПОЛНЕНОЙ части массива names
+size_t Flags::names_len = __LINE__ - BEGIN__LINE__ - 4;
 
 //----------------------------------------------------------------
-void Flags::print(std::ostream& output) const
+const char *Flags::c_str() const
 {
-	for( int i = 0; i < SIZE( names ); i++ )
+	// для значения в поле val ищем подходящие имена в names и складываем их в flag
+	size_t flags = 0;
+	const Names *flag[64];
+	for( int i = names_len; i > 0; )
 	{
-		if( names[i].val & val )
-			output << names[i].name << ' ';
+		--i;
+		if( (val & names[i].mask) == names[i].val )
+		{
+			assert( SIZE( flag) > flags );
+			flag[ flags++] = &names[i];
+			if( names[i].mask == 0xFFFFFFFF )
+				break;
+		}
+	}
+
+	assert( flags );
+	// если нашелся всего один флаг - просто отдаем его имя
+	if( flags == 1 )
+		return flag[0]->name;
+
+	// если несколько - склеиваем из их имен строку, заносим ее в names и отдаем её
+	// * считаем длину строки
+	size_t str_len = 0;
+	size_t strlen_flag_name[ SIZE( flag )];
+	for( size_t i = flags; i > 0; )
+	{
+		--i;
+		size_t cur_strlen_flag_name = strlen( flag[i]->name );
+		strlen_flag_name[i] = cur_strlen_flag_name;
+		str_len += cur_strlen_flag_name;
+	}
+	str_len += STRLEN( separator) * (flags - 1);
+
+	char* str = new char[ str_len + 1];
+
+	// * склеиваем
+	char* p = str;
+	--flags;
+	memcpy( p, flag[flags]->name, strlen_flag_name[flags] );
+	p += strlen_flag_name[flags];
+	while( flags > 0 )
+	{
+		--flags;
+		memcpy( p, separator, STRLEN( separator ) );
+		p += STRLEN( separator );
+		memcpy( p, flag[flags]->name, strlen_flag_name[flags] );
+		p += strlen_flag_name[flags];
+	}
+	*p = 0;
+	assert( p - str == str_len );
+
+	// заносим в names, names у нас навроде кеша
+	assert( SIZE( names ) > names_len );
+	names[ names_len++] = { val, 0xFFFFFFFF, str };
+
+	return str;
+}
+
+//----------------------------------------------------------------
+void Flags::print( std::ostream& output ) const
+{
+	for( int i = names_len; i > 0; )
+	{
+		--i;
+		if( (val & names[i].mask) == names[i].val )
+		{
+			output << names[i].name << separator;
+			if( names[i].mask == 0xFFFFFFFF )
+				break;
+		}
 	}
 }
 
@@ -229,9 +305,25 @@ IMAGE_NT_HEADERS* load_NT_headers( const char* filename, char buf[], const size_
 //----------------------------------------------------------------
 void print_max_info( const char* filename )
 {
+	struct Image_section_header {
+		BYTE    Name[IMAGE_SIZEOF_SHORT_NAME];
+		union {
+			DWORD   PhysicalAddress;
+			DWORD   VirtualSize;
+		} Misc;
+		DWORD   VirtualAddress;
+		DWORD   SizeOfRawData;
+		DWORD   PointerToRawData;
+		DWORD   PointerToRelocations;
+		DWORD   PointerToLinenumbers;
+		WORD    NumberOfRelocations;
+		WORD    NumberOfLinenumbers;
+		Flags   Characteristics;
+	};
+
 	char buf[4096];
 	IMAGE_NT_HEADERS*	image_NT_headers	= load_NT_headers( filename, PS( buf ) );
-	IMAGE_SECTION_HEADER*	image_section_header	= IMAGE_FIRST_SECTION( image_NT_headers );
+	Image_section_header*	image_section_header	= (Image_section_header*)IMAGE_FIRST_SECTION( image_NT_headers );
 
 	printf( "%s: -------- Section Table --------\n"
 		"Name     Virt Addr  Virt Size  Raw Addr  Raw Size  Flags\n"
@@ -239,17 +331,14 @@ void print_max_info( const char* filename )
 	      );
 	for( WORD i = 0; i < image_NT_headers->FileHeader.NumberOfSections; i++ )
 	{
-		printf	( outfmt[0][radix] //"%-9.8s % 8X   % 8X  % 8X  % 8X  "
+		printf	( "%-9.8s % 8X   % 8X  % 8X  % 8X  %s\n" //outfmt[0][radix] 
 			, image_section_header[i].Name
 			, image_section_header[i].VirtualAddress
 			, image_section_header[i].Misc.VirtualSize
 			, image_section_header[i].PointerToRawData
 			, image_section_header[i].SizeOfRawData
+			, image_section_header[i].Characteristics.c_str()
 			);
-
-		std::cout << *((Flags*) &(image_section_header[i].Characteristics ));
-
-		printf( "\n" );
 	}
 	printf( "\n" );
 }
