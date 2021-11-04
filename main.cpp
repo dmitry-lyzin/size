@@ -1,7 +1,6 @@
 #define MAX_FILENAMES	50
 #define MAX_FILENAMES_S	"50"
 #define MAX_SECTOIN	20
-#define MAX_SECTOIN_S	"20"
 
 //----------------------------------------------------------------
 #include <stdio.h>
@@ -14,6 +13,93 @@
 #include <windows.h>
 #include <iostream>
 #include "constexpr_lowercase.h"
+
+//----------------------------------------------------------------
+#pragma region // Array, Map
+
+//----------------------------------------------------------------
+template <class Cls, size_t aaa>
+class Array
+{
+	Cls a[aaa];
+	size_t s = 0;
+public:
+constexpr	size_t max_size	(		) const { return std::size(a);			};
+		size_t size	(		) const { return s;				};
+		bool is_full	(		) const	{ return s >= std::size(a);		};
+		Cls* new_end	(		)	{ assert( !is_full()); return &a[s++];	};
+		void push_back	( const Cls& x	)	{ assert( !is_full()); a[s++] = x;	};
+		Cls* begin	(		)	{ return a;				};
+		Cls* end	(		)	{ return &a[s];				};
+		Cls& operator*	(		)	{ return a[0];				};
+		Cls& operator[]	( size_t i	)	{ assert( i    && i<s ); return a[i];	};
+		Cls& operator[]	( int i		)	{ assert( i>=0 && i<s ); return a[i];	};
+constexpr const	Cls* begin	(		) const	{ return a;				};
+constexpr const	Cls* end	(		) const	{ return &a[s];				};
+constexpr const	Cls& operator*	(		) const	{ return a[0];				};
+constexpr const	Cls& operator[]	( size_t i	) const { static_assert( i    && i<s, "out of range"); return a[i]; };
+constexpr const	Cls& operator[]	( int i		) const { static_assert( i>=0 && i<s, "out of range"); return a[i]; };
+};
+
+//----------------------------------------------------------------
+template	< class Key,	class Value	>
+struct Pair	{ Key key;	Value value;	};
+
+//----------------------------------------------------------------
+template <class Key, class Value, size_t size>
+struct Map: public Array< Pair< Key, Value>, size>
+{
+	typedef Pair< Key, Value> KeyVal;
+	////template <typename Key, typename Value>
+	//class Helper
+	//{
+	//	Map* pmap;
+	//	Key m_key;
+	//public:
+	//	operator Value& () const
+	//	{
+	//		KeyVal* p = pmap->find( m_key );
+	//		if( p )
+	//			return p->value;
+	//		p = pmap->new_end();
+	//		p->key = m_key;
+	//		return p->value;
+	//	}
+	//	Helper& operator=( const Value& newValue ) const
+	//	{
+	//		pmap->insert( m_key, newValue );
+	//		return *this;
+	//	}
+	//};
+	KeyVal* find( const Key& key )
+	{
+		KeyVal* p = begin();
+		for( size_t i = size(); i > 0; ++p )
+		{
+			--i;
+			if( key == (*p).key )
+				return p;
+		}
+		return NULL;
+	};
+
+	Value& operator[]( const Key& key )
+	{
+		KeyVal* p = begin();
+		for( size_t i = size(); i > 0; ++p )
+		{
+			--i;
+			if( key == (*p).key )
+				return p->value;
+		}
+		p = new_end();
+		p->key = key;
+		//p->value = false;
+		return p->value;
+	};
+};
+
+#pragma endregion
 
 //----------------------------------------------------------------
 #pragma region // макросы для совместимости между unix и windows
@@ -46,7 +132,7 @@
 
 //----------------------------------------------------------------
 #define FATAL(x) do { perror( x); exit( EXIT_FAILURE); } while (0)
-#define FATALMSG( x, errmsg) do { fprintf( stderr, "%s: " errmsg "\n", (x) ); exit( EXIT_FAILURE); } while (0)
+#define FATALMSG( file, errmsg) do { fprintf( stderr, "%s: " errmsg "\n", (file) ); exit( EXIT_FAILURE); } while (0)
 #define SIZE(x) (sizeof (x) / sizeof( *(x)))
 #define STRLEN(x) (sizeof (x) / sizeof( *(x)) - 1)
 #define PS(x) (x), SIZE(x)
@@ -303,109 +389,90 @@ IMAGE_NT_HEADERS* load_NT_headers( const char* filename, char buf[], const size_
 }
 
 //----------------------------------------------------------------
+class Section_name
+{
+	union { BYTE name[8]; uint64_t key; } u;
+public:
+	const BYTE*    c_str	() const { return u.name; };
+	operator const uint64_t&() const { return u.key; };
+};
+
+//----------------------------------------------------------------
+struct Image_section_header {
+	Section_name	name;
+	union {
+		DWORD   PhysicalAddress;
+		DWORD   VirtualSize;
+	} Misc;
+	DWORD   VirtualAddress;
+	DWORD   SizeOfRawData;
+	DWORD   PointerToRawData;
+	DWORD   PointerToRelocations;
+	DWORD   PointerToLinenumbers;
+	WORD    NumberOfRelocations;
+	WORD    NumberOfLinenumbers;
+	Flags   characteristics;
+};
+
+//----------------------------------------------------------------
 void print_max_info( const char* filename )
 {
-	struct Image_section_header {
-		BYTE    Name[IMAGE_SIZEOF_SHORT_NAME];
-		union {
-			DWORD   PhysicalAddress;
-			DWORD   VirtualSize;
-		} Misc;
-		DWORD   VirtualAddress;
-		DWORD   SizeOfRawData;
-		DWORD   PointerToRawData;
-		DWORD   PointerToRelocations;
-		DWORD   PointerToLinenumbers;
-		WORD    NumberOfRelocations;
-		WORD    NumberOfLinenumbers;
-		Flags   Characteristics;
-	};
-
 	char buf[4096];
-	IMAGE_NT_HEADERS*	image_NT_headers	= load_NT_headers( filename, PS( buf ) );
-	Image_section_header*	image_section_header	= (Image_section_header*)IMAGE_FIRST_SECTION( image_NT_headers );
+	IMAGE_NT_HEADERS*	NT_headers	= load_NT_headers( filename, PS( buf ) );
+	Image_section_header*	section_header	= (Image_section_header*)IMAGE_FIRST_SECTION( NT_headers );
 
 	printf( "%s: -------- Section Table --------\n"
 		"Name     Virt Addr  Virt Size  Raw Addr  Raw Size  Flags\n"
 	      , filename
 	      );
-	for( WORD i = 0; i < image_NT_headers->FileHeader.NumberOfSections; i++ )
+	for( WORD i = 0; i < NT_headers->FileHeader.NumberOfSections; i++ )
 	{
 		printf	( "%-9.8s % 8X   % 8X  % 8X  % 8X  %s\n" //outfmt[0][radix] 
-			, image_section_header[i].Name
-			, image_section_header[i].VirtualAddress
-			, image_section_header[i].Misc.VirtualSize
-			, image_section_header[i].PointerToRawData
-			, image_section_header[i].SizeOfRawData
-			, image_section_header[i].Characteristics.c_str()
+			, section_header[i].name.c_str()
+			, section_header[i].VirtualAddress
+			, section_header[i].Misc.VirtualSize
+			, section_header[i].PointerToRawData
+			, section_header[i].SizeOfRawData
+			, section_header[i].characteristics.c_str()
 			);
 	}
 	printf( "\n" );
 }
 
 //----------------------------------------------------------------
-size_t section_names_len	= 0;
-size_t files_len		= 0;
-uint64_t							section_names	[ MAX_SECTOIN	] = { 0 };
-struct { DWORD VirtualSize[ MAX_SECTOIN]; const char* name; }	files		[ MAX_FILENAMES	] = { 0 };
+Map< Section_name, DWORD[MAX_FILENAMES], MAX_SECTOIN> sections;
 
 //----------------------------------------------------------------
-void mem_sections_size( const char* filename )
+void load_n_printf_sizes( int argc, const char* argv[] )
 {
-	char buf[4096];
-	IMAGE_NT_HEADERS* image_NT_headers = load_NT_headers( filename, PS( buf ) );
-	IMAGE_SECTION_HEADER* image_section_header = IMAGE_FIRST_SECTION( image_NT_headers );
+	if( !argc )
+		return;
 
-	if( files_len >= SIZE( files ) )
-		FATALMSG( filename, "Too many files (more " MAX_FILENAMES_S ")" );
+	if( argc > MAX_FILENAMES )
+		FATALMSG( argv[ MAX_FILENAMES], "Too many files (must be <= " MAX_FILENAMES_S ")" );
 
-	files[files_len].name = filename;
-
-	for( WORD s = 0; s < image_NT_headers->FileHeader.NumberOfSections; s++ )
+	for( int i = 0; i < argc; i++ )
 	{
-		// ищем колонку с именем section_name
-		const uint64_t section_name = *((uint64_t*) image_section_header[s].Name);
-		for( size_t n = 0; n < section_names_len; n++ )
-		{
-			if( section_name == section_names[n] )
-			{
-				files[files_len].VirtualSize[n] = image_section_header[s].Misc.VirtualSize;
-				goto next_s;
-			}
-		}
+		char buf[4096];
+		IMAGE_NT_HEADERS* NT_headers = load_NT_headers( argv[i], PS( buf ) );
+		Image_section_header* section_header = (Image_section_header*) IMAGE_FIRST_SECTION( NT_headers );
 
-		// добавляем новую колонку
-		if( section_names_len >= SIZE( section_names ) )
-			FATALMSG( filename, "Too many section headers in the file (more " MAX_SECTOIN_S ")" );
-		section_names			[ section_names_len] = section_name;
-		files[ files_len].VirtualSize	[ section_names_len] = image_section_header[s].Misc.VirtualSize;
-		section_names_len++;
-
-	next_s:;
+		for( size_t s = 0; s < NT_headers->FileHeader.NumberOfSections; s++ )
+			sections[ section_header[s].name ][i] = section_header[s].Misc.VirtualSize;
 	}
 
-	files_len++;
-}
-
-//----------------------------------------------------------------
-NO_RETURN print_sections_size()
-{
-	if( !files_len )
-		exit( 0 );
-
 	// печатаем заголовок таблицы
-	for( size_t col = 0; col < section_names_len; col++ )
-		printf( "%9.8s", (char *) &(section_names[ col]) );
+	for( auto& section : sections )
+		printf( "%9.8s", section.key.c_str() );
 	printf( " filename\n" );
 
 	// печатаем таблицу
-	for( size_t row = 0; row < files_len; row++ )
+	for( int i = 0; i < argc; i++ )
 	{
-		for( size_t col = 0; col < section_names_len; col++ )
-			printf( "% 9X", files[row].VirtualSize[col] );
-		printf( " %s\n", files[row].name );
+		for( auto& section : sections )
+			printf( "% 9X", section.value[i] );
+		printf( " %s\n", argv[i] );
 	}
-	exit( 0 );
 }
 
 //----------------------------------------------------------------
@@ -422,9 +489,8 @@ int main( int argc, const char* argv[] )
 		switch( getopt( argc, argv, "hodxm:" ) )
 		{
 		case -1:
-			for( int i = optind; i < argc; i++ )
-				mem_sections_size( argv[i] );
-			print_sections_size();
+			load_n_printf_sizes( argc - optind, &argv[optind] );
+			exit( 0 );
 							break;
 		case 'o': radix = 0;			break;
 		case 'd': radix = 0;			break;
