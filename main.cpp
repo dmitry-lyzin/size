@@ -19,31 +19,32 @@
 
 //----------------------------------------------------------------
 template <class Cls, size_t aaa>
-class Array
+struct Array
 {
 	Cls a[aaa];
 	size_t s = 0;
-public:
+
 constexpr	size_t max_size	(		) const { return std::size(a);			};
 		size_t size	(		) const { return s;				};
 		bool is_full	(		) const	{ return s >= std::size(a);		};
+		bool empty	(		) const	{ return !s;				};
 		Cls* new_end	(		)	{ assert( !is_full()); return &a[s++];	};
 		void push_back	( const Cls& x	)	{ assert( !is_full()); a[s++] = x;	};
 		Cls* begin	(		)	{ return a;				};
 		Cls* end	(		)	{ return &a[s];				};
 		Cls& operator*	(		)	{ return a[0];				};
-		Cls& operator[]	( size_t i	)	{ assert( i    && i<s ); return a[i];	};
-		Cls& operator[]	( int i		)	{ assert( i>=0 && i<s ); return a[i];	};
+		Cls& operator[]	( size_t i	)	{ assert( i < s ); return a[i];		};
+		Cls& operator[]	( int i		)	{ assert( i>=0 && i<int(s)); return a[i];};
 constexpr const	Cls* begin	(		) const	{ return a;				};
 constexpr const	Cls* end	(		) const	{ return &a[s];				};
 constexpr const	Cls& operator*	(		) const	{ return a[0];				};
-constexpr const	Cls& operator[]	( size_t i	) const { static_assert( i    && i<s, "out of range"); return a[i]; };
-constexpr const	Cls& operator[]	( int i		) const { static_assert( i>=0 && i<s, "out of range"); return a[i]; };
+constexpr const	Cls& operator[]	( size_t i	) const { static_assert( i < s, "out of range"); return a[i];		};
+constexpr const	Cls& operator[]	( int i		) const { static_assert( i>=0 && i<int(s), "out of range"); return a[i];};
 };
 
 //----------------------------------------------------------------
 template	< class Key,	class Value	>
-struct Pair	{ Key key;	Value value;	};
+struct Pair	{ Key key;	Value val;	};
 
 //----------------------------------------------------------------
 template <class Key, class Value, size_t size>
@@ -90,12 +91,40 @@ struct Map: public Array< Pair< Key, Value>, size>
 		{
 			--i;
 			if( key == (*p).key )
-				return p->value;
+				return p->val;
 		}
 		p = new_end();
 		p->key = key;
 		//p->value = false;
-		return p->value;
+		return p->val;
+	};
+};
+
+//----------------------------------------------------------------
+class Light_str
+{
+	char* b;
+	char* e;
+public:
+	Light_str(				): b( NULL	), e( NULL			) {};
+	Light_str( const char* x, size_t s	): b( (char*) x	), e( (char*) x + s		) {};
+	Light_str( const char* x		): b( (char*) x	), e( (char*) x + strlen(x)	) {};
+
+	size_t size		() const { return e - b; };
+	char* begin		() const { return b; };
+	char* end		() const { return e; };
+	operator const char*	() const { return b; };
+
+	Light_str& operator+=( const char x )
+	{
+		*e++ = x;
+		return *this;
+	};
+	Light_str& operator+=( const Light_str& x )
+	{
+		memcpy( e, x.begin(), x.size() );
+		e += x.size();
+		return *this;
 	};
 };
 
@@ -174,14 +203,31 @@ NO_RETURN usage( const char* cmd )
 
 //================================================================
 #pragma region // class Flags
+//----------------------------------------------------------------
+template< typename Value>
+struct Bitset
+{
+	Value val;
+	Value mask;
+
+	constexpr static const Value fullmask = Value(0) - 1; // 0xFFFFFFFF
+	static_assert( fullmask > Value( 0), "Value must be unsigned!");
+
+	Bitset& operator=( Value x ) { val = x; mask = fullmask; return *this; };
+
+	operator Value	(		) const { assert( full() ); return val;	};
+	bool full	(		) const { return mask == fullmask;	};
+	bool operator==	( const Value x ) const { return (x & mask) == val;	};
+};
 
 //----------------------------------------------------------------
 class Flags
 {
 	DWORD val;
 
-	constexpr static const char separator[] = " ";
-	typedef struct { DWORD val; DWORD mask; const char* name; } Names;
+	static const Light_str separator;
+	typedef Bitset< DWORD> Bits;
+	typedef struct { Bits bits; const char* name; } Names;
 	static size_t names_len;
 	static Names  names[140];
 public:
@@ -216,8 +262,8 @@ inline std::ostream& operator<<( std::ostream& output, const Flags& s ) { s.prin
 #define IMAGE_SCN_MEM_PROTECTED		0x00004000  // Obsolete
 #define IMAGE_SCN_MEM_SYSHEAP		0x00010000  // Obsolete
 
-#define IMAGE_SCN1( x)		{ IMAGE_SCN_##x, IMAGE_SCN_##x,	CONSTEXPR_TOLOWER1(#x) }
-#define IMAGE_SCN2( x, mask)	{ IMAGE_SCN_##x, mask,		CONSTEXPR_TOLOWER1(#x) }
+#define IMAGE_SCN1( x)		{ { IMAGE_SCN_##x, IMAGE_SCN_##x, },	CONSTEXPR_TOLOWER1(#x) }
+#define IMAGE_SCN2( x, mask)	{ { IMAGE_SCN_##x, mask,	  },	CONSTEXPR_TOLOWER1(#x) }
 
 constexpr int BEGIN__LINE__ = __LINE__;
 Flags::Names Flags::names[] =
@@ -272,62 +318,52 @@ Flags::Names Flags::names[] =
 size_t Flags::names_len = __LINE__ - BEGIN__LINE__ - 4;
 
 //----------------------------------------------------------------
+const Light_str Flags::separator( PS(" ")-1 );
+
+//----------------------------------------------------------------
 const char *Flags::c_str() const
 {
 	// для значения в поле val ищем подходящие имена в names и складываем их в flag
-	size_t flags = 0;
-	const Names *flag[64];
+	Array< Light_str, 64> flag;
 	for( int i = names_len; i > 0; )
 	{
 		--i;
-		if( (val & names[i].mask) == names[i].val )
+		if( names[i].bits == val )
 		{
-			assert( SIZE( flag) > flags );
-			flag[ flags++] = &names[i];
-			if( names[i].mask == 0xFFFFFFFF )
+			flag.push_back( names[i].name );
+			if( names[i].bits.full() )
 				break;
 		}
 	}
 
-	assert( flags );
+	assert( !flag.empty() );
 	// если нашелся всего один флаг - просто отдаем его имя
-	if( flags == 1 )
-		return flag[0]->name;
+	if( flag.size() == 1 )
+		return flag[0];
 
 	// если несколько - склеиваем из их имен строку, заносим ее в names и отдаем её
 	// * считаем длину строки
 	size_t str_len = 0;
-	size_t strlen_flag_name[ SIZE( flag )];
-	for( size_t i = flags; i > 0; )
-	{
-		--i;
-		size_t cur_strlen_flag_name = strlen( flag[i]->name );
-		strlen_flag_name[i] = cur_strlen_flag_name;
-		str_len += cur_strlen_flag_name;
-	}
-	str_len += STRLEN( separator) * (flags - 1);
-
-	char* str = new char[ str_len + 1];
+	for( size_t i = flag.size(); i > 0; )
+		str_len += flag[--i].size();
+	str_len += separator.size() * (flag.size() - 1);
 
 	// * склеиваем
-	char* p = str;
-	--flags;
-	memcpy( p, flag[flags]->name, strlen_flag_name[flags] );
-	p += strlen_flag_name[flags];
-	while( flags > 0 )
+	Light_str str( new char[str_len + 1], 0 );
+	size_t i = flag.size() - 1;
+	str += flag[i];
+	while( i > 0 )
 	{
-		--flags;
-		memcpy( p, separator, STRLEN( separator ) );
-		p += STRLEN( separator );
-		memcpy( p, flag[flags]->name, strlen_flag_name[flags] );
-		p += strlen_flag_name[flags];
+		str += separator;
+		str += flag[--i];
 	}
-	*p = 0;
-	assert( p - str == str_len );
+	str += '\0';
 
 	// заносим в names, names у нас навроде кеша
 	assert( SIZE( names ) > names_len );
-	names[ names_len++] = { val, 0xFFFFFFFF, str };
+	names[names_len].bits = val;
+	names[names_len].name = str;
+	names_len++;
 
 	return str;
 }
@@ -338,10 +374,10 @@ void Flags::print( std::ostream& output ) const
 	for( int i = names_len; i > 0; )
 	{
 		--i;
-		if( (val & names[i].mask) == names[i].val )
+		if( names[i].bits == val )
 		{
 			output << names[i].name << separator;
-			if( names[i].mask == 0xFFFFFFFF )
+			if( names[i].bits.full() )
 				break;
 		}
 	}
@@ -470,7 +506,7 @@ void load_n_printf_sizes( int argc, const char* argv[] )
 	for( int i = 0; i < argc; i++ )
 	{
 		for( auto& section : sections )
-			printf( "% 9X", section.value[i] );
+			printf( "% 9X", section.val[i] );
 		printf( " %s\n", argv[i] );
 	}
 }
