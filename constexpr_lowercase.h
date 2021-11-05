@@ -22,12 +22,6 @@ struct LowerCaseString
 	{ ((STR >= 'A' && STR <= 'Z') ? STR + ('a' - 'A') : STR)... };
 };
 
-// Definition of member variable value.
-//template <char... STR>
-//		constexpr const char LowerCaseString <STR...>::value[sizeof...(STR)];
-
-
-
 template			< typename			, typename				> struct LowerCaseStringHelper;
 template			< typename	STRING_WRAPPER	, size_t... indexes			>
 struct LowerCaseStringHelper	<		STRING_WRAPPER	, std::index_sequence< indexes... >	>
@@ -38,7 +32,7 @@ struct LowerCaseStringHelper	<		STRING_WRAPPER	, std::index_sequence< indexes...
 
 /*----------------------------------------------------------------------------------------*/
 /// CONSTEXPR_TOLOWER returns the given string literal as a C string 
-/// where all characters have be converted to lower case. The construction of the converted
+/// where all characters have be converted to lower case. The construction of the converted 
 /// C string happens at compile time.
 /// @param[in]	stringLiteral			A C string literal.
 /// @return	Pointer to a const char array which contains the given stringLiteral converted to lower case.
