@@ -1,6 +1,5 @@
 #define MAX_FILENAMES	50
 #define MAX_FILENAMES_S	"50"
-#define MAX_SECTOIN	20
 
 //----------------------------------------------------------------
 #include <stdio.h>
@@ -34,13 +33,18 @@
 #define PS(x) (x), SIZE(x)
 
 //----------------------------------------------------------------
-#pragma region // Array, Map
+namespace light
+{
+
+#ifndef DEFAULT_SIZE_OF_LIGHT_CONTAINERS
+#	define DEFAULT_SIZE_OF_LIGHT_CONTAINERS 128
+#endif
 
 //----------------------------------------------------------------
-template <class Cls, size_t aaa>
-struct Array
+template <class Cls, size_t n = DEFAULT_SIZE_OF_LIGHT_CONTAINERS>
+struct Vector
 {
-	Cls a[aaa];
+	Cls a[n];
 	size_t s = 0;
 	typedef Cls* iterator;
 
@@ -52,11 +56,13 @@ constexpr	size_t max_size	(		) const { return SIZE(a);			};
 		void push_back	( const Cls& x	)	{ assert( !is_full() ); a[s++] = x;	};
 		Cls* begin	(		)	{ return a;				};
 		Cls* end	(		)	{ return &a[s];				};
+		Cls* back	(		)	{ return &a[s - 1];			};
 		Cls& operator*	(		)	{ return a[0];				};
 		Cls& operator[]	( size_t i	)	{ assert( i < s ); return a[i];		};
 		Cls& operator[]	( int i		)	{ assert( i>=0 && i<int(s)); return a[i];};
 constexpr const	Cls* begin	(		) const	{ return a;				};
 constexpr const	Cls* end	(		) const	{ return &a[s];				};
+constexpr const	Cls* back	(		) const	{ return &a[s - 1];			};
 constexpr const	Cls& operator*	(		) const	{ return a[0];				};
 constexpr const	Cls& operator[]	( size_t i	) const { static_assert( i < s, "out of range"); return a[i];		};
 constexpr const	Cls& operator[]	( int i		) const { static_assert( i>=0 && i<int(s), "out of range"); return a[i];};
@@ -67,31 +73,11 @@ template	< class First,	class Second	>
 struct Pair	{ First first;	Second second;	};
 
 //----------------------------------------------------------------
-template <class Key, class Value, size_t size>
-struct Map: public Array< Pair< Key, Value>, size>
+template <class Key, class Value, size_t size = DEFAULT_SIZE_OF_LIGHT_CONTAINERS>
+struct Map: public Vector< Pair< Key, Value>, size>
 {
 	typedef Pair< Key, Value> KeyVal;
-	////template <typename Key, typename Value>
-	//class Helper
-	//{
-	//	Map* pmap;
-	//	Key m_key;
-	//public:
-	//	operator Value& () const
-	//	{
-	//		KeyVal* p = pmap->find( m_key );
-	//		if( p )
-	//			return p->value;
-	//		p = pmap->new_end();
-	//		p->key = m_key;
-	//		return p->value;
-	//	}
-	//	Helper& operator=( const Value& newValue ) const
-	//	{
-	//		pmap->insert( m_key, newValue );
-	//		return *this;
-	//	}
-	//};
+
 	iterator find( const Key& key )
 	{
 		iterator p = begin();
@@ -114,7 +100,7 @@ struct Map: public Array< Pair< Key, Value>, size>
 				return p->second;
 		}
 		resize( size() + 1 );
-		p = end() - 1;
+		p = back();
 		p->first = key;
 		//p->second = 0;
 		return p->second;
@@ -122,26 +108,26 @@ struct Map: public Array< Pair< Key, Value>, size>
 };
 
 //----------------------------------------------------------------
-class Light_str // std::string_view ?
+class Str // std::string_view ?
 {
 	char* b;
 	char* e;
 public:
-	Light_str(				): b( NULL	), e( NULL			) {};
-	Light_str( const char* x, size_t s	): b( (char*) x	), e( (char*) x + s		) {};
-	Light_str( const char* x		): b( (char*) x	), e( (char*) x + strlen(x)	) {};
+	Str(				): b( NULL	), e( NULL			) {};
+	Str( const char* x, size_t s	): b( (char*) x	), e( (char*) x + s		) {};
+	Str( const char* x		): b( (char*) x	), e( (char*) x + strlen(x)	) {};
 
 	size_t size		() const { return e - b; };
 	char* begin		() const { return b; };
 	char* end		() const { return e; };
 	operator const char*	() const { return b; };
 
-	Light_str& operator+=( const char x )
+	Str& operator+=( const char x )
 	{
 		*e++ = x;
 		return *this;
 	};
-	Light_str& operator+=( const Light_str& x )
+	Str& operator+=( const Str& x )
 	{
 		memcpy( e, x.begin(), x.size() );
 		e += x.size();
@@ -149,7 +135,7 @@ public:
 	};
 };
 
-#pragma endregion
+} // namespace light
 
 //----------------------------------------------------------------
 #pragma region // макросы для совместимости между unix и windows
@@ -234,6 +220,8 @@ struct Bitset
 	constexpr static const Value allbits = Value(0) - 1; // 0xFFFFFFFF
 	static_assert( allbits > Value( 0), "Value must be unsigned!");
 
+	//Bitset( const Value& x			): val( x ), mask( x ) {};
+	//Bitset( const Value& x, const Value& m	): val( x ), mask( m ) {};
 	Bitset& operator=( Value x ) { val = x; mask = allbits; return *this; };
 
 	operator Value	(		) const { assert( full() ); return val;	};
@@ -248,9 +236,9 @@ class Flags
 
 	typedef Bitset< DWORD> Bits;
 	typedef struct { Bits bits; const char* name; } Bitname;
-	typedef Array< Bitname, 140> Names;
+	typedef light::Vector< Bitname> Names;
 
-	static const Light_str separator;
+	static const light::Str separator;
 	static Names names;
 public:
 	const char* c_str() const;
@@ -331,13 +319,13 @@ Flags::Names Flags::names =
 };
 
 //----------------------------------------------------------------
-const Light_str Flags::separator( PS(" ")-1 );
+const light::Str Flags::separator( PS(" ")-1 );
 
 //----------------------------------------------------------------
 const char *Flags::c_str() const
 {
 	// для значения в поле val ищем подходящие имена в names и складываем их в flag
-	Array< Light_str, 64> flag;
+	light::Vector< light::Str> flag;
 	for( int i = names.size(); i > 0; )
 	{
 		--i;
@@ -362,7 +350,7 @@ const char *Flags::c_str() const
 	str_len += separator.size() * (flag.size() - 1);
 
 	// * склеиваем
-	Light_str str( new char[str_len + 1], 0 );
+	light::Str str( new char[str_len + 1], 0 );
 	size_t i = flag.size() - 1;
 	str += flag[i];
 	while( i > 0 )
@@ -373,8 +361,8 @@ const char *Flags::c_str() const
 	str += '\0';
 
 	// заносим в names, names у нас навроде кеша
-	const Bitname tmp = { {val, Bits::allbits}, str };
-	names.push_back( tmp );
+	names.resize( names.size() + 1 );
+	*names.back() = { { val, Bits::allbits}, str };
 
 	return str;
 }
@@ -488,7 +476,7 @@ void print_max_info( const char* filename )
 
 //----------------------------------------------------------------
 // sections объявлен глобально чтоб его на халяву заполнили нулями
-Map< Section_name, DWORD[MAX_FILENAMES], MAX_SECTOIN> sections;
+light::Map< Section_name, DWORD[MAX_FILENAMES]> sections;
 
 //----------------------------------------------------------------
 void load_n_printf_sizes( int argc, const char* argv[] )
