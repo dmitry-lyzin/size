@@ -10,9 +10,28 @@
 #include <locale.h>
 #include <fcntl.h>
 #include <assert.h>
-#include <windows.h>
-#include <iostream>
+//#include <iostream> 
 #include "constexpr_lowercase.h"
+
+//----------------------------------------------------------------
+#include <windows.h>
+// в <windows.h> не определены, но встречаются
+#define IMAGE_SCN_TYPE_REG		0x00000000  // Reserved.
+#define IMAGE_SCN_TYPE_DSECT		0x00000001  // Reserved.
+#define IMAGE_SCN_TYPE_NOLOAD		0x00000002  // Reserved.
+#define IMAGE_SCN_TYPE_GROUP		0x00000004  // Reserved.
+#define IMAGE_SCN_TYPE_COPY		0x00000010  // Reserved.
+#define IMAGE_SCN_TYPE_OVER		0x00000400  // Reserved.
+#define IMAGE_SCN_0x00002000		0x00002000  // Reserved.
+#define IMAGE_SCN_MEM_PROTECTED		0x00004000  // Obsolete
+#define IMAGE_SCN_MEM_SYSHEAP		0x00010000  // Obsolete
+
+//----------------------------------------------------------------
+#define FATAL(x) do { perror( x); exit( EXIT_FAILURE); } while (0)
+#define FATALMSG( file, errmsg) do { fprintf( stderr, "%s: " errmsg "\n", (file) ); exit( EXIT_FAILURE); } while (0)
+#define SIZE(x) (sizeof (x) / sizeof( *(x)))
+#define STRLEN(x) (sizeof (x) / sizeof( *(x)) - 1)
+#define PS(x) (x), SIZE(x)
 
 //----------------------------------------------------------------
 #pragma region // Array, Map
@@ -23,13 +42,14 @@ struct Array
 {
 	Cls a[aaa];
 	size_t s = 0;
+	typedef Cls* iterator;
 
-constexpr	size_t max_size	(		) const { return std::size(a);			};
+constexpr	size_t max_size	(		) const { return SIZE(a);			};
 		size_t size	(		) const { return s;				};
-		bool is_full	(		) const	{ return s >= std::size(a);		};
+		bool is_full	(		) const	{ return s >= SIZE(a);			};
 		bool empty	(		) const	{ return !s;				};
-		Cls* new_end	(		)	{ assert( !is_full()); return &a[s++];	};
-		void push_back	( const Cls& x	)	{ assert( !is_full()); a[s++] = x;	};
+		void resize	( size_t ns	)	{ assert( ns <= SIZE(a) ); s = ns;	};
+		void push_back	( const Cls& x	)	{ assert( !is_full() ); a[s++] = x;	};
 		Cls* begin	(		)	{ return a;				};
 		Cls* end	(		)	{ return &a[s];				};
 		Cls& operator*	(		)	{ return a[0];				};
@@ -43,8 +63,8 @@ constexpr const	Cls& operator[]	( int i		) const { static_assert( i>=0 && i<int(
 };
 
 //----------------------------------------------------------------
-template	< class Key,	class Value	>
-struct Pair	{ Key key;	Value val;	};
+template	< class First,	class Second	>
+struct Pair	{ First first;	Second second;	};
 
 //----------------------------------------------------------------
 template <class Key, class Value, size_t size>
@@ -72,13 +92,13 @@ struct Map: public Array< Pair< Key, Value>, size>
 	//		return *this;
 	//	}
 	//};
-	KeyVal* find( const Key& key )
+	iterator find( const Key& key )
 	{
-		KeyVal* p = begin();
+		iterator p = begin();
 		for( size_t i = size(); i > 0; ++p )
 		{
 			--i;
-			if( key == (*p).key )
+			if( key == p->first )
 				return p;
 		}
 		return NULL;
@@ -86,22 +106,23 @@ struct Map: public Array< Pair< Key, Value>, size>
 
 	Value& operator[]( const Key& key )
 	{
-		KeyVal* p = begin();
+		iterator p = begin();
 		for( size_t i = size(); i > 0; ++p )
 		{
 			--i;
-			if( key == (*p).key )
-				return p->val;
+			if( key == p->first )
+				return p->second;
 		}
-		p = new_end();
-		p->key = key;
-		//p->value = false;
-		return p->val;
+		resize( size() + 1 );
+		p = end() - 1;
+		p->first = key;
+		//p->second = 0;
+		return p->second;
 	};
 };
 
 //----------------------------------------------------------------
-class Light_str
+class Light_str // std::string_view ?
 {
 	char* b;
 	char* e;
@@ -210,13 +231,13 @@ struct Bitset
 	Value val;
 	Value mask;
 
-	constexpr static const Value fullmask = Value(0) - 1; // 0xFFFFFFFF
-	static_assert( fullmask > Value( 0), "Value must be unsigned!");
+	constexpr static const Value allbits = Value(0) - 1; // 0xFFFFFFFF
+	static_assert( allbits > Value( 0), "Value must be unsigned!");
 
-	Bitset& operator=( Value x ) { val = x; mask = fullmask; return *this; };
+	Bitset& operator=( Value x ) { val = x; mask = allbits; return *this; };
 
 	operator Value	(		) const { assert( full() ); return val;	};
-	bool full	(		) const { return mask == fullmask;	};
+	bool full	(		) const { return mask == allbits;	};
 	bool operator==	( const Value x ) const { return (x & mask) == val;	};
 };
 
@@ -234,10 +255,10 @@ class Flags
 public:
 	const char* c_str() const;
 	operator const char* () const { return c_str(); };
-	void print( std::ostream& output ) const;
+	//void print( std::ostream& output ) const;
 };
 //inline std::istream& operator>>( std::istream& input, Flags& s ) { s.read( input ); return input; }	
-inline std::ostream& operator<<( std::ostream& output, const Flags& s ) { s.print( output ); return output; }
+//inline std::ostream& operator<<( std::ostream& output, const Flags& s ) { s.print( output ); return output; }
 
 //----------------------------------------------------------------
 #define CONSTEXPR_TOLOWER1( stringLiteral)										\
@@ -253,22 +274,12 @@ inline std::ostream& operator<<( std::ostream& output, const Flags& s ) { s.prin
 	return a;													\
 }()
 
-#define IMAGE_SCN_TYPE_REG		0x00000000  // Reserved.
-#define IMAGE_SCN_TYPE_DSECT		0x00000001  // Reserved.
-#define IMAGE_SCN_TYPE_NOLOAD		0x00000002  // Reserved.
-#define IMAGE_SCN_TYPE_GROUP		0x00000004  // Reserved.
-#define IMAGE_SCN_TYPE_COPY		0x00000010  // Reserved.
-#define IMAGE_SCN_TYPE_OVER		0x00000400  // Reserved.
-#define IMAGE_SCN_0x00002000		0x00002000  // Reserved.
-#define IMAGE_SCN_MEM_PROTECTED		0x00004000  // Obsolete
-#define IMAGE_SCN_MEM_SYSHEAP		0x00010000  // Obsolete
-
 #define IMAGE_SCN1( x)		{ { IMAGE_SCN_##x, IMAGE_SCN_##x, },	CONSTEXPR_TOLOWER1(#x) }
 #define IMAGE_SCN2( x, mask)	{ { IMAGE_SCN_##x, mask,	  },	CONSTEXPR_TOLOWER1(#x) }
 
 constexpr int BEGIN__LINE__ = __LINE__;
 Flags::Names Flags::names =
-{ { IMAGE_SCN2( TYPE_REG,	Flags::Bits::fullmask	) // 0x00000000  // Reserved.
+{ { IMAGE_SCN2( TYPE_REG,	Flags::Bits::allbits	) // 0x00000000  // Reserved.
   , IMAGE_SCN1( TYPE_DSECT				) // 0x00000001  // Reserved.
   , IMAGE_SCN1( TYPE_NOLOAD				) // 0x00000002  // Reserved.
   , IMAGE_SCN1( TYPE_GROUP				) // 0x00000004  // Reserved.
@@ -313,7 +324,7 @@ Flags::Names Flags::names =
   , IMAGE_SCN1( MEM_EXECUTE				)
   , IMAGE_SCN1( MEM_READ				)
   , IMAGE_SCN1( MEM_WRITE				)
-  , IMAGE_SCN2( SCALE_INDEX,	Flags::Bits::fullmask	) // 0x00000001  // Tls index is scaled
+  , IMAGE_SCN2( SCALE_INDEX,	Flags::Bits::allbits	) // 0x00000001  // Tls index is scaled
   }
 // извратный способ посчитать длину ЗАПОЛНЕНОЙ части массива names
 , __LINE__ - BEGIN__LINE__ - 4
@@ -362,25 +373,26 @@ const char *Flags::c_str() const
 	str += '\0';
 
 	// заносим в names, names у нас навроде кеша
-	*(names.new_end()) = { {val, Bits::fullmask}, str };
+	const Bitname tmp = { {val, Bits::allbits}, str };
+	names.push_back( tmp );
 
 	return str;
 }
 
 //----------------------------------------------------------------
-void Flags::print( std::ostream& output ) const
-{
-	for( int i = names.size(); i > 0; )
-	{
-		--i;
-		if( names[i].bits == val )
-		{
-			output << names[i].name << separator;
-			if( names[i].bits.full() )
-				break;
-		}
-	}
-}
+//void Flags::print( std::ostream& output ) const
+//{
+//	for( int i = names.size(); i > 0; )
+//	{
+//		--i;
+//		if( names[i].bits == val )
+//		{
+//			output << names[i].name << separator;
+//			if( names[i].bits.full() )
+//				break;
+//		}
+//	}
+//}
 
 #pragma endregion
 
@@ -429,7 +441,7 @@ class Section_name
 	union { BYTE name[8]; uint64_t key; } u;
 public:
 	const BYTE*    c_str	() const { return u.name; };
-	operator const uint64_t&() const { return u.key; };
+	operator const uint64_t () const { return u.key; };
 };
 
 //----------------------------------------------------------------
@@ -475,6 +487,7 @@ void print_max_info( const char* filename )
 }
 
 //----------------------------------------------------------------
+// sections объявлен глобально чтоб его на халяву заполнили нулями
 Map< Section_name, DWORD[MAX_FILENAMES], MAX_SECTOIN> sections;
 
 //----------------------------------------------------------------
@@ -498,14 +511,14 @@ void load_n_printf_sizes( int argc, const char* argv[] )
 
 	// печатаем заголовок таблицы
 	for( auto& section : sections )
-		printf( "%9.8s", section.key.c_str() );
+		printf( "%9.8s", section.first.c_str() );
 	printf( " filename\n" );
 
 	// печатаем таблицу
 	for( int i = 0; i < argc; i++ )
 	{
 		for( auto& section : sections )
-			printf( "% 9X", section.val[i] );
+			printf( "% 9X", section.second[i] );
 		printf( " %s\n", argv[i] );
 	}
 }
