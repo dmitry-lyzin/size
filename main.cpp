@@ -225,11 +225,12 @@ class Flags
 {
 	DWORD val;
 
-	static const Light_str separator;
 	typedef Bitset< DWORD> Bits;
-	typedef struct { Bits bits; const char* name; } Names;
-	static size_t names_len;
-	static Names  names[140];
+	typedef struct { Bits bits; const char* name; } Bitname;
+	typedef Array< Bitname, 140> Names;
+
+	static const Light_str separator;
+	static Names names;
 public:
 	const char* c_str() const;
 	operator const char* () const { return c_str(); };
@@ -266,56 +267,57 @@ inline std::ostream& operator<<( std::ostream& output, const Flags& s ) { s.prin
 #define IMAGE_SCN2( x, mask)	{ { IMAGE_SCN_##x, mask,	  },	CONSTEXPR_TOLOWER1(#x) }
 
 constexpr int BEGIN__LINE__ = __LINE__;
-Flags::Names Flags::names[] =
-{ IMAGE_SCN2( TYPE_REG,		0xFFFFFFFF		) // 0x00000000  // Reserved.
-, IMAGE_SCN1( TYPE_DSECT				) // 0x00000001  // Reserved.
-, IMAGE_SCN1( TYPE_NOLOAD				) // 0x00000002  // Reserved.
-, IMAGE_SCN1( TYPE_GROUP				) // 0x00000004  // Reserved.
-, IMAGE_SCN1( TYPE_NO_PAD				) // 0x00000008  // Reserved.
-, IMAGE_SCN1( TYPE_COPY					) // 0x00000010  // Reserved.
-, IMAGE_SCN1( CNT_CODE					)
-, IMAGE_SCN1( CNT_INITIALIZED_DATA			)
-, IMAGE_SCN1( CNT_UNINITIALIZED_DATA			)
-, IMAGE_SCN1( LNK_OTHER					) // 0x00000100  // Reserved.
-, IMAGE_SCN1( LNK_INFO					)
-, IMAGE_SCN1( TYPE_OVER					) // 0x00000400  // Reserved.
-, IMAGE_SCN1( LNK_REMOVE				)
-, IMAGE_SCN1( LNK_COMDAT				)
-, IMAGE_SCN1( 0x00002000				) // 0x00002000  // Reserved.
-, IMAGE_SCN1( MEM_PROTECTED				) // 0x00004000  // Obsolete
-, IMAGE_SCN1( NO_DEFER_SPEC_EXC				)
-, IMAGE_SCN1( GPREL					)
-, IMAGE_SCN1( MEM_FARDATA				)
-, IMAGE_SCN1( MEM_SYSHEAP				) // 0x00010000  // Obsolete
-, IMAGE_SCN1( MEM_PURGEABLE				)
-, IMAGE_SCN1( MEM_16BIT					)
-, IMAGE_SCN1( MEM_LOCKED				)
-, IMAGE_SCN1( MEM_PRELOAD				)
-, IMAGE_SCN2( ALIGN_2BYTES,	IMAGE_SCN_ALIGN_MASK	)
-, IMAGE_SCN2( ALIGN_4BYTES,	IMAGE_SCN_ALIGN_MASK	)
-, IMAGE_SCN2( ALIGN_8BYTES,	IMAGE_SCN_ALIGN_MASK	)
-, IMAGE_SCN2( ALIGN_16BYTES,	IMAGE_SCN_ALIGN_MASK	)
-, IMAGE_SCN2( ALIGN_32BYTES,	IMAGE_SCN_ALIGN_MASK	)
-, IMAGE_SCN2( ALIGN_64BYTES,	IMAGE_SCN_ALIGN_MASK	)
-, IMAGE_SCN2( ALIGN_128BYTES,	IMAGE_SCN_ALIGN_MASK	)
-, IMAGE_SCN2( ALIGN_256BYTES,	IMAGE_SCN_ALIGN_MASK	)
-, IMAGE_SCN2( ALIGN_512BYTES,	IMAGE_SCN_ALIGN_MASK	)
-, IMAGE_SCN2( ALIGN_1024BYTES,	IMAGE_SCN_ALIGN_MASK	)
-, IMAGE_SCN2( ALIGN_2048BYTES,	IMAGE_SCN_ALIGN_MASK	)
-, IMAGE_SCN2( ALIGN_4096BYTES,	IMAGE_SCN_ALIGN_MASK	)
-, IMAGE_SCN2( ALIGN_8192BYTES,	IMAGE_SCN_ALIGN_MASK	)
-, IMAGE_SCN1( LNK_NRELOC_OVFL				)
-, IMAGE_SCN1( MEM_DISCARDABLE				)
-, IMAGE_SCN1( MEM_NOT_CACHED				)
-, IMAGE_SCN1( MEM_NOT_PAGED				)
-, IMAGE_SCN1( MEM_SHARED				)
-, IMAGE_SCN1( MEM_EXECUTE				)
-, IMAGE_SCN1( MEM_READ					)
-, IMAGE_SCN1( MEM_WRITE					)
-, IMAGE_SCN2( SCALE_INDEX,	0xFFFFFFFF		) // 0x00000001  // Tls index is scaled
-};
+Flags::Names Flags::names =
+{ { IMAGE_SCN2( TYPE_REG,	Flags::Bits::fullmask	) // 0x00000000  // Reserved.
+  , IMAGE_SCN1( TYPE_DSECT				) // 0x00000001  // Reserved.
+  , IMAGE_SCN1( TYPE_NOLOAD				) // 0x00000002  // Reserved.
+  , IMAGE_SCN1( TYPE_GROUP				) // 0x00000004  // Reserved.
+  , IMAGE_SCN1( TYPE_NO_PAD				) // 0x00000008  // Reserved.
+  , IMAGE_SCN1( TYPE_COPY				) // 0x00000010  // Reserved.
+  , IMAGE_SCN1( CNT_CODE				)
+  , IMAGE_SCN1( CNT_INITIALIZED_DATA			)
+  , IMAGE_SCN1( CNT_UNINITIALIZED_DATA			)
+  , IMAGE_SCN1( LNK_OTHER				) // 0x00000100  // Reserved.
+  , IMAGE_SCN1( LNK_INFO				)
+  , IMAGE_SCN1( TYPE_OVER				) // 0x00000400  // Reserved.
+  , IMAGE_SCN1( LNK_REMOVE				)
+  , IMAGE_SCN1( LNK_COMDAT				)
+  , IMAGE_SCN1( 0x00002000				) // 0x00002000  // Reserved.
+  , IMAGE_SCN1( MEM_PROTECTED				) // 0x00004000  // Obsolete
+  , IMAGE_SCN1( NO_DEFER_SPEC_EXC			)
+  , IMAGE_SCN1( GPREL					)
+  , IMAGE_SCN1( MEM_FARDATA				)
+  , IMAGE_SCN1( MEM_SYSHEAP				) // 0x00010000  // Obsolete
+  , IMAGE_SCN1( MEM_PURGEABLE				)
+  , IMAGE_SCN1( MEM_16BIT				)
+  , IMAGE_SCN1( MEM_LOCKED				)
+  , IMAGE_SCN1( MEM_PRELOAD				)
+  , IMAGE_SCN2( ALIGN_2BYTES,	IMAGE_SCN_ALIGN_MASK	)
+  , IMAGE_SCN2( ALIGN_4BYTES,	IMAGE_SCN_ALIGN_MASK	)
+  , IMAGE_SCN2( ALIGN_8BYTES,	IMAGE_SCN_ALIGN_MASK	)
+  , IMAGE_SCN2( ALIGN_16BYTES,	IMAGE_SCN_ALIGN_MASK	)
+  , IMAGE_SCN2( ALIGN_32BYTES,	IMAGE_SCN_ALIGN_MASK	)
+  , IMAGE_SCN2( ALIGN_64BYTES,	IMAGE_SCN_ALIGN_MASK	)
+  , IMAGE_SCN2( ALIGN_128BYTES,	IMAGE_SCN_ALIGN_MASK	)
+  , IMAGE_SCN2( ALIGN_256BYTES,	IMAGE_SCN_ALIGN_MASK	)
+  , IMAGE_SCN2( ALIGN_512BYTES,	IMAGE_SCN_ALIGN_MASK	)
+  , IMAGE_SCN2( ALIGN_1024BYTES,IMAGE_SCN_ALIGN_MASK	)
+  , IMAGE_SCN2( ALIGN_2048BYTES,IMAGE_SCN_ALIGN_MASK	)
+  , IMAGE_SCN2( ALIGN_4096BYTES,IMAGE_SCN_ALIGN_MASK	)
+  , IMAGE_SCN2( ALIGN_8192BYTES,IMAGE_SCN_ALIGN_MASK	)
+  , IMAGE_SCN1( LNK_NRELOC_OVFL				)
+  , IMAGE_SCN1( MEM_DISCARDABLE				)
+  , IMAGE_SCN1( MEM_NOT_CACHED				)
+  , IMAGE_SCN1( MEM_NOT_PAGED				)
+  , IMAGE_SCN1( MEM_SHARED				)
+  , IMAGE_SCN1( MEM_EXECUTE				)
+  , IMAGE_SCN1( MEM_READ				)
+  , IMAGE_SCN1( MEM_WRITE				)
+  , IMAGE_SCN2( SCALE_INDEX,	Flags::Bits::fullmask	) // 0x00000001  // Tls index is scaled
+  }
 // извратный способ посчитать длину ЗАПОЛНЕНОЙ части массива names
-size_t Flags::names_len = __LINE__ - BEGIN__LINE__ - 4;
+, __LINE__ - BEGIN__LINE__ - 4
+};
 
 //----------------------------------------------------------------
 const Light_str Flags::separator( PS(" ")-1 );
@@ -325,7 +327,7 @@ const char *Flags::c_str() const
 {
 	// для значения в поле val ищем подходящие имена в names и складываем их в flag
 	Array< Light_str, 64> flag;
-	for( int i = names_len; i > 0; )
+	for( int i = names.size(); i > 0; )
 	{
 		--i;
 		if( names[i].bits == val )
@@ -360,10 +362,7 @@ const char *Flags::c_str() const
 	str += '\0';
 
 	// заносим в names, names у нас навроде кеша
-	assert( SIZE( names ) > names_len );
-	names[names_len].bits = val;
-	names[names_len].name = str;
-	names_len++;
+	*(names.new_end()) = { {val, Bits::fullmask}, str };
 
 	return str;
 }
@@ -371,7 +370,7 @@ const char *Flags::c_str() const
 //----------------------------------------------------------------
 void Flags::print( std::ostream& output ) const
 {
-	for( int i = names_len; i > 0; )
+	for( int i = names.size(); i > 0; )
 	{
 		--i;
 		if( names[i].bits == val )
