@@ -42,7 +42,7 @@ namespace light
 
 //----------------------------------------------------------------
 template <class Cls, size_t n = DEFAULT_SIZE_OF_LIGHT_CONTAINERS>
-struct Vector
+struct vector
 {
 	Cls a[n];
 	size_t s = 0;
@@ -70,13 +70,13 @@ constexpr const	Cls& operator[]	( int i		) const { static_assert( i>=0 && i<int(
 
 //----------------------------------------------------------------
 template	< class First,	class Second	>
-struct Pair	{ First first;	Second second;	};
+struct pair	{ First first;	Second second;	};
 
 //----------------------------------------------------------------
 template <class Key, class Value, size_t size = DEFAULT_SIZE_OF_LIGHT_CONTAINERS>
-struct Map: public Vector< Pair< Key, Value>, size>
+struct map: public vector< pair< Key, Value>, size>
 {
-	typedef Pair< Key, Value> KeyVal;
+	typedef pair< Key, Value> KeyVal;
 
 	iterator find( const Key& key )
 	{
@@ -174,13 +174,6 @@ public:
 #define PS(x) (x), SIZE(x)
 
 //----------------------------------------------------------------
-int radix = 1;
-const char* outfmt[][2] =
-{ { "%-8.8s% 10u % 10u% 10u% 10u  "	, "%-9.8s % 8X   % 8X  % 8X  % 8X  "	}
-, { "%s:\t%u\n"				, "%s:\t%X\n"				}
-};
-
-//----------------------------------------------------------------
 NO_RETURN usage( const char* cmd )
 {
 	// нету в студии basename'а...
@@ -222,27 +215,36 @@ struct Bitset
 
 	//Bitset( const Value& x			): val( x ), mask( x ) {};
 	//Bitset( const Value& x, const Value& m	): val( x ), mask( m ) {};
-	Bitset& operator=( Value x ) { val = x; mask = allbits; return *this; };
 
-	operator Value	(		) const { assert( full() ); return val;	};
-	bool full	(		) const { return mask == allbits;	};
-	bool operator==	( const Value x ) const { return (x & mask) == val;	};
+	bool	full	   (			) const { return mask == allbits;	};
+	bool	operator ==( const Value x	) const { return (x & mask) == val;	};
+	operator bool	   (			) const	{ return mask;			};
+
+	Bitset	operator ~ (			) const	{ Bitset t = { ~val & mask, mask }; return t;	};
+	Bitset&	operator &=( const Bitset& x	)	{ val |= x.val; mask |= x.mask;	return *this;	};
+	Bitset	operator & ( const Bitset& x	) const { Bitset t = *this;		return t &= x;	};
+	Bitset& operator = ( const Value x	)	{ val = x; mask = x;		return *this;	};
+	Bitset&	operator &=( const Value x	)	{ val |= x; mask |= x;		return *this;	};
+	Bitset	operator & ( const Value x	) const { Bitset t = *this;		return t &= x;	};
 };
 
 //----------------------------------------------------------------
-class Flags
+struct Flags
 {
-	DWORD val;
-
 	typedef Bitset< DWORD> Bits;
 	typedef struct { Bits bits; const char* name; } Bitname;
-	typedef light::Vector< Bitname> Names;
+	typedef light::vector< Bitname> Names;
+private:
+	DWORD val;
 
 	static const light::Str separator;
 	static Names names;
 public:
+	Flags(		): val( 0 ) {};
+	Flags( DWORD x	): val( x ) {};
 	const char* c_str() const;
-	operator const char* () const { return c_str(); };
+	operator const char* () const { return c_str();	};
+	operator const DWORD () const { return val;	};
 	//void print( std::ostream& output ) const;
 };
 //inline std::istream& operator>>( std::istream& input, Flags& s ) { s.read( input ); return input; }	
@@ -319,13 +321,13 @@ Flags::Names Flags::names =
 };
 
 //----------------------------------------------------------------
-const light::Str Flags::separator( PS(" ")-1 );
+const light::Str Flags::separator( PS(" & ")-1 );
 
 //----------------------------------------------------------------
 const char *Flags::c_str() const
 {
 	// для значения в поле val ищем подходящие имена в names и складываем их в flag
-	light::Vector< light::Str> flag;
+	light::vector< light::Str> flag;
 	for( int i = names.size(); i > 0; )
 	{
 		--i;
@@ -450,64 +452,136 @@ struct Image_section_header {
 };
 
 //----------------------------------------------------------------
-void print_max_info( const char* filename )
+enum Radix { octal = 0, decimal = 1, hexadecimal = 2 };
+Radix radix = hexadecimal;
+
+const char* const outfmt[][3] =
+{ { "%-8.8s% 10o % 10o% 10o% 10o  %s\n"		  // sysv_tabstr
+  , "%-8.8s% 10u % 10u% 10u% 10u  %s\n"		
+  , "%-9.8s % 8X   % 8X  % 8X  % 8X  %s\n"
+  }
+, { "TOTAL              % 10o          % 10o\n"	  // sysv_totalstr
+  , "TOTAL              % 10u          % 10u\n"
+  , "TOTAL                % 8X            % 8X\n"
+  }
+, { "%9.8s"	, "%9.8s"	, "%9.8s"	} // berkeley_head
+, { "% 9o"	, "% 9u"	, "% 9X"	} // berkeley_val
+};
+
+enum
+{ sysv_tabstr	= 0
+, sysv_totalstr	= 1
+, berkeley_head = 2
+, berkeley_val	= 3
+};
+
+Flags::Bits total_condish;
+const
+Flags::Bits ECRO = // exec_code_read_only
+{ IMAGE_SCN_MEM_EXECUTE | IMAGE_SCN_MEM_READ | IMAGE_SCN_CNT_CODE | 0				     | 0
+, IMAGE_SCN_MEM_EXECUTE | IMAGE_SCN_MEM_READ | IMAGE_SCN_CNT_CODE | IMAGE_SCN_CNT_UNINITIALIZED_DATA | IMAGE_SCN_MEM_WRITE
+};
+
+//----------------------------------------------------------------
+void print_sysv( int argc, const char* argv[] )
 {
 	char buf[4096];
-	IMAGE_NT_HEADERS*	NT_headers	= load_NT_headers( filename, PS( buf ) );
-	Image_section_header*	section_header	= (Image_section_header*)IMAGE_FIRST_SECTION( NT_headers );
-
-	printf( "%s: -------- Section Table --------\n"
-		"Name     Virt Addr  Virt Size  Raw Addr  Raw Size  Flags\n"
-	      , filename
-	      );
-	for( WORD i = 0; i < NT_headers->FileHeader.NumberOfSections; i++ )
+	for( int i = 0; i < argc; i++ )
 	{
-		printf	( "%-9.8s % 8X   % 8X  % 8X  % 8X  %s\n" //outfmt[0][radix] 
-			, section_header[i].name.c_str()
-			, section_header[i].VirtualAddress
-			, section_header[i].Misc.VirtualSize
-			, section_header[i].PointerToRawData
-			, section_header[i].SizeOfRawData
-			, section_header[i].characteristics.c_str()
+		IMAGE_NT_HEADERS* NT_headers = load_NT_headers( argv[i], PS( buf ) );
+		Image_section_header* section_header = (Image_section_header*) IMAGE_FIRST_SECTION( NT_headers );
+
+		printf( "%s:\n"
+			"Section  Virt Addr  Virt Size  Raw Addr  Raw Size  Flags\n"
+			, argv[i]
 			);
+		const char* fmt = outfmt[ sysv_tabstr ][radix];
+		size_t total_VirtualSize   = 0;
+		size_t total_SizeOfRawData = 0;
+		const auto* p = section_header;
+		for( size_t s = 0; s < NT_headers->FileHeader.NumberOfSections; s++, p++ )
+		{
+			printf( fmt // "%-9.8s % 8X   % 8X  % 8X  % 8X  %s\n"
+				, p->name.c_str()
+				, p->VirtualAddress
+				, p->Misc.VirtualSize
+				, p->PointerToRawData
+				, p->SizeOfRawData
+				, p->characteristics.c_str()
+				);
+			if( total_condish == p->characteristics )
+			{
+				total_VirtualSize   += p->Misc.VirtualSize;
+				total_SizeOfRawData += p->SizeOfRawData;
+			}
+		}
+		if( total_condish )
+			printf( outfmt[ sysv_totalstr ][radix], total_VirtualSize, total_SizeOfRawData );
+		printf( "\n" );
 	}
-	printf( "\n" );
+	if( total_condish )
+		printf( "TOTAL flags: %s & not( %s )\n", Flags( total_condish.val).c_str(), Flags( (~total_condish).val ).c_str() );
 }
 
 //----------------------------------------------------------------
+struct Section_data { Flags flags; DWORD size[MAX_FILENAMES]; };
 // sections объявлен глобально чтоб его на халяву заполнили нулями
-light::Map< Section_name, DWORD[MAX_FILENAMES]> sections;
+light::map< Section_name, Section_data > sections;
 
 //----------------------------------------------------------------
-void load_n_printf_sizes( int argc, const char* argv[] )
+void print_berkeley( int argc, const char* argv[] )
 {
-	if( !argc )
-		return;
-
 	if( argc > MAX_FILENAMES )
 		FATALMSG( argv[ MAX_FILENAMES], "Too many files (must be <= " MAX_FILENAMES_S ")" );
 
+	char buf[4096];
 	for( int i = 0; i < argc; i++ )
 	{
-		char buf[4096];
 		IMAGE_NT_HEADERS* NT_headers = load_NT_headers( argv[i], PS( buf ) );
 		Image_section_header* section_header = (Image_section_header*) IMAGE_FIRST_SECTION( NT_headers );
 
 		for( size_t s = 0; s < NT_headers->FileHeader.NumberOfSections; s++ )
-			sections[ section_header[s].name ][i] = section_header[s].Misc.VirtualSize;
+		{
+			auto &r = sections[ section_header[s].name ];
+			r.size[i] = section_header[s].Misc.VirtualSize;
+			r.flags	  = section_header[s].characteristics;
+		}
 	}
 
 	// печатаем заголовок таблицы
+	const char*
+	fmt = outfmt[ berkeley_head ][radix];
 	for( auto& section : sections )
-		printf( "%9.8s", section.first.c_str() );
-	printf( " filename\n" );
+		printf( fmt, section.first.c_str() );
 
+	printf	( total_condish	? "    TOTAL filename\n"
+			: " filename\n"
+		);
 	// печатаем таблицу
+	fmt = outfmt[ berkeley_val ][radix];
 	for( int i = 0; i < argc; i++ )
 	{
+		size_t total_sum = 0;
 		for( auto& section : sections )
-			printf( "% 9X", section.second[i] );
+		{
+			size_t s = section.second.size[i];
+			if( total_condish == section.second.flags )
+				total_sum += s;
+			printf( fmt, s );
+		}
+		if( total_condish )
+			printf( fmt, total_sum );
 		printf( " %s\n", argv[i] );
+	}
+	if( total_condish )
+	{
+		printf( "\nTOTAL sections:" );
+		for( auto& section : sections )
+		{
+			if( total_condish == section.second.flags )
+				printf( " %.8s", section.first.c_str() );
+		}
+		printf( "\nTOTAL    flags: %s & not( %s )\n", Flags( total_condish.val ).c_str(), Flags( (~total_condish).val ).c_str() );
 	}
 }
 
@@ -516,24 +590,37 @@ int main( int argc, const char* argv[] )
 {
 	setlocale( LC_ALL, "" );
 
+	enum { SysV, Berkeley, GNU } format = Berkeley;
+
 	const char* cmd = argv[0];
 	if( 1 == argc )
 		usage( cmd );
 
-	while( 1)
+	for(;;)
 	{
-		switch( getopt( argc, argv, "hodxm:" ) )
+		switch( getopt( argc, argv, "odxABGth" ) )
 		{
 		case -1:
-			load_n_printf_sizes( argc - optind, &argv[optind] );
+			if( argc - optind <= 0 )
+				exit( 0 );
+
+			switch( format )
+			{
+			case SysV:	print_sysv	( argc - optind, &argv[optind] ); break;
+			case Berkeley:	print_berkeley	( argc - optind, &argv[optind] ); break;
+			case GNU:	print_berkeley	( argc - optind, &argv[optind] ); break;
+			}
 			exit( 0 );
-							break;
-		case 'o': radix = 0;			break;
-		case 'd': radix = 0;			break;
-		case 'x': radix = 1;			break;
-		case 'm': print_max_info( optarg );	break;
-		case 'h': usage( cmd );			break;
-		default	: usage( cmd );			break;
+						break;
+		case 'o': radix = octal;	break;
+		case 'd': radix = decimal;	break;
+		case 'x': radix = hexadecimal;	break;
+		case 'A': format = SysV;	break;
+		case 'B': format = Berkeley;	break;
+		case 'G': format = GNU;		break;
+		case 't': total_condish = ECRO;	break;
+		case 'h': usage( cmd );		break;
+		default	: usage( cmd );		break;
 		}
 	}
 }
