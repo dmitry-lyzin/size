@@ -475,7 +475,7 @@ enum
 , berkeley_val	= 3
 };
 
-Flags::Bits total_condish;
+Flags::Bits total_cond;
 const
 Flags::Bits ECRO = // exec_code_read_only
 { IMAGE_SCN_MEM_EXECUTE | IMAGE_SCN_MEM_READ | IMAGE_SCN_CNT_CODE | 0				     | 0
@@ -501,7 +501,7 @@ void print_sysv( int argc, const char* argv[] )
 		const auto* p = section_header;
 		for( size_t s = 0; s < NT_headers->FileHeader.NumberOfSections; s++, p++ )
 		{
-			printf( fmt // "%-9.8s % 8X   % 8X  % 8X  % 8X  %s\n"
+			printf	( fmt // "%-9.8s % 8X   % 8X  % 8X  % 8X  %s\n"
 				, p->name.c_str()
 				, p->VirtualAddress
 				, p->Misc.VirtualSize
@@ -509,18 +509,18 @@ void print_sysv( int argc, const char* argv[] )
 				, p->SizeOfRawData
 				, p->characteristics.c_str()
 				);
-			if( total_condish == p->characteristics )
+			if( total_cond == p->characteristics )
 			{
 				total_VirtualSize   += p->Misc.VirtualSize;
 				total_SizeOfRawData += p->SizeOfRawData;
 			}
 		}
-		if( total_condish )
+		if( total_cond )
 			printf( outfmt[ sysv_totalstr ][radix], total_VirtualSize, total_SizeOfRawData );
 		printf( "\n" );
 	}
-	if( total_condish )
-		printf( "TOTAL flags: %s & not( %s )\n", Flags( total_condish.val).c_str(), Flags( (~total_condish).val ).c_str() );
+	if( total_cond )
+		printf( "TOTAL flags: %s & not( %s )\n", Flags( total_cond.val).c_str(), Flags( (~total_cond).val ).c_str() );
 }
 
 //----------------------------------------------------------------
@@ -554,7 +554,7 @@ void print_berkeley( int argc, const char* argv[] )
 	for( auto& section : sections )
 		printf( fmt, section.first.c_str() );
 
-	printf	( total_condish	? "    TOTAL filename\n"
+	printf	( total_cond	? "    TOTAL filename\n"
 			: " filename\n"
 		);
 	// печатаем таблицу
@@ -565,23 +565,23 @@ void print_berkeley( int argc, const char* argv[] )
 		for( auto& section : sections )
 		{
 			size_t s = section.second.size[i];
-			if( total_condish == section.second.flags )
+			if( total_cond == section.second.flags )
 				total_sum += s;
 			printf( fmt, s );
 		}
-		if( total_condish )
+		if( total_cond )
 			printf( fmt, total_sum );
 		printf( " %s\n", argv[i] );
 	}
-	if( total_condish )
+	if( total_cond )
 	{
 		printf( "\nTOTAL sections:" );
 		for( auto& section : sections )
 		{
-			if( total_condish == section.second.flags )
+			if( total_cond == section.second.flags )
 				printf( " %.8s", section.first.c_str() );
 		}
-		printf( "\nTOTAL    flags: %s & not( %s )\n", Flags( total_condish.val ).c_str(), Flags( (~total_condish).val ).c_str() );
+		printf( "\nTOTAL    flags: %s & not( %s )\n", Flags( total_cond.val ).c_str(), Flags( (~total_cond).val ).c_str() );
 	}
 }
 
@@ -618,7 +618,7 @@ int main( int argc, const char* argv[] )
 		case 'A': format = SysV;	break;
 		case 'B': format = Berkeley;	break;
 		case 'G': format = GNU;		break;
-		case 't': total_condish = ECRO;	break;
+		case 't': total_cond = ECRO;	break;
 		case 'h': usage( cmd );		break;
 		default	: usage( cmd );		break;
 		}
