@@ -104,6 +104,7 @@
   <ItemGroup>
     <ClInclude Include="constexpr_lowercase.h" />
     <ClInclude Include="getopt.h" />
+    <ClInclude Include="light.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

@@ -11,6 +11,16 @@
 #include <assert.h>
 //#include <iostream> 
 #include "constexpr_lowercase.h"
+#include "light.h"
+
+#include <vector>
+#include <map>
+//template <class Val		> using Vector	= std::vector< Val>;
+//template <class Key, class Value> using Map	= std::map< Key, Value>;
+
+template <class Val		> using Vector	= light::Vector< Val, 128>;
+template <class Key, class Value> using Map	= light::Map< Key, Value, 128>;
+
 
 //----------------------------------------------------------------
 #include <windows.h>
@@ -31,111 +41,6 @@
 #define SIZE(x) (sizeof (x) / sizeof( *(x)))
 #define STRLEN(x) (sizeof (x) / sizeof( *(x)) - 1)
 #define PS(x) (x), SIZE(x)
-
-//----------------------------------------------------------------
-namespace light
-{
-
-#ifndef DEFAULT_SIZE_OF_LIGHT_CONTAINERS
-#	define DEFAULT_SIZE_OF_LIGHT_CONTAINERS 128
-#endif
-
-//----------------------------------------------------------------
-template <class Cls, size_t n = DEFAULT_SIZE_OF_LIGHT_CONTAINERS>
-struct vector
-{
-	Cls a[n];
-	size_t s = 0;
-	typedef Cls* iterator;
-
-constexpr	size_t max_size	(		) const { return SIZE(a);			};
-		size_t size	(		) const { return s;				};
-		bool is_full	(		) const	{ return s >= SIZE(a);			};
-		bool empty	(		) const	{ return !s;				};
-		void resize	( size_t ns	)	{ assert( ns <= SIZE(a) ); s = ns;	};
-		void push_back	( const Cls& x	)	{ assert( !is_full() ); a[s++] = x;	};
-		Cls* begin	(		)	{ return a;				};
-		Cls* end	(		)	{ return &a[s];				};
-		Cls* back	(		)	{ return &a[s - 1];			};
-		Cls& operator*	(		)	{ return a[0];				};
-		Cls& operator[]	( size_t i	)	{ assert( i < s ); return a[i];		};
-		Cls& operator[]	( int i		)	{ assert( i>=0 && i<int(s)); return a[i];};
-constexpr const	Cls* begin	(		) const	{ return a;				};
-constexpr const	Cls* end	(		) const	{ return &a[s];				};
-constexpr const	Cls* back	(		) const	{ return &a[s - 1];			};
-constexpr const	Cls& operator*	(		) const	{ return a[0];				};
-constexpr const	Cls& operator[]	( size_t i	) const { static_assert( i < s, "out of range"); return a[i];		};
-constexpr const	Cls& operator[]	( int i		) const { static_assert( i>=0 && i<int(s), "out of range"); return a[i];};
-};
-
-//----------------------------------------------------------------
-template	< class First,	class Second	>
-struct pair	{ First first;	Second second;	};
-
-//----------------------------------------------------------------
-template <class Key, class Value, size_t size = DEFAULT_SIZE_OF_LIGHT_CONTAINERS>
-struct map: public vector< pair< Key, Value>, size>
-{
-	typedef pair< Key, Value> KeyVal;
-
-	iterator find( const Key& key )
-	{
-		iterator p = begin();
-		for( size_t i = size(); i > 0; ++p )
-		{
-			--i;
-			if( key == p->first )
-				return p;
-		}
-		return NULL;
-	};
-
-	Value& operator[]( const Key& key )
-	{
-		iterator p = begin();
-		for( size_t i = size(); i > 0; ++p )
-		{
-			--i;
-			if( key == p->first )
-				return p->second;
-		}
-		resize( size() + 1 );
-		p = back();
-		p->first = key;
-		//p->second = 0;
-		return p->second;
-	};
-};
-
-//----------------------------------------------------------------
-class Str // std::string_view ?
-{
-	char* b;
-	char* e;
-public:
-	Str(				): b( NULL	), e( NULL			) {};
-	Str( const char* x, size_t s	): b( (char*) x	), e( (char*) x + s		) {};
-	Str( const char* x		): b( (char*) x	), e( (char*) x + strlen(x)	) {};
-
-	size_t size		() const { return e - b; };
-	char* begin		() const { return b; };
-	char* end		() const { return e; };
-	operator const char*	() const { return b; };
-
-	Str& operator+=( const char x )
-	{
-		*e++ = x;
-		return *this;
-	};
-	Str& operator+=( const Str& x )
-	{
-		memcpy( e, x.begin(), x.size() );
-		e += x.size();
-		return *this;
-	};
-};
-
-} // namespace light
 
 //----------------------------------------------------------------
 #pragma region // макросы для совместимости между unix и windows
@@ -204,47 +109,58 @@ NO_RETURN usage( const char* cmd )
 //================================================================
 #pragma region // class Flags
 //----------------------------------------------------------------
-template< typename Value>
+template< typename Val>
 struct Bitset
 {
-	Value val;
-	Value mask;
+	Val val;
+	Val mask;
 
-	constexpr static const Value allbits = Value(0) - 1; // 0xFFFFFFFF
-	static_assert( allbits > Value( 0), "Value must be unsigned!");
+	constexpr static const Val allbits = Val(0) - 1; // 0xFFFFFFFF
+	static_assert( allbits > Val( 0), "Val must be unsigned!");
 
-	//Bitset( const Value& x			): val( x ), mask( x ) {};
-	//Bitset( const Value& x, const Value& m	): val( x ), mask( m ) {};
+	Bitset(			)			{}
+	Bitset( Val x		): val( x ), mask( x )	{}
+	Bitset( Val x, Val m	): val( x ), mask( m )	{}
 
 	bool	full	   (			) const { return mask == allbits;	};
-	bool	operator ==( const Value x	) const { return (x & mask) == val;	};
+	bool	operator ==( const Val x	) const { return (x & mask) == val;	};
 	operator bool	   (			) const	{ return mask;			};
 
 	Bitset	operator ~ (			) const	{ Bitset t = { ~val & mask, mask }; return t;	};
 	Bitset&	operator &=( const Bitset& x	)	{ val |= x.val; mask |= x.mask;	return *this;	};
 	Bitset	operator & ( const Bitset& x	) const { Bitset t = *this;		return t &= x;	};
-	Bitset& operator = ( const Value x	)	{ val = x; mask = x;		return *this;	};
-	Bitset&	operator &=( const Value x	)	{ val |= x; mask |= x;		return *this;	};
-	Bitset	operator & ( const Value x	) const { Bitset t = *this;		return t &= x;	};
+	Bitset& operator = ( const Val x	)	{ val = x; mask = x;		return *this;	};
+	Bitset&	operator &=( const Val x	)	{ val |= x; mask |= x;		return *this;	};
+	Bitset	operator & ( const Val x	) const { Bitset t = *this;		return t &= x;	};
+};
+
+typedef Bitset< DWORD> Bits;
+
+//----------------------------------------------------------------
+struct Bitname
+{
+	Bits bits;
+	const char* name;
+	Bitname(					)				  {}
+	Bitname( const Bits& bits_, const char* name_	): bits( bits_	), name( name_	) {}
+	Bitname( const Bitname& r			): bits( r.bits	), name( r.name ) {}
 };
 
 //----------------------------------------------------------------
 struct Flags
 {
-	typedef Bitset< DWORD> Bits;
-	typedef struct { Bits bits; const char* name; } Bitname;
-	typedef light::vector< Bitname> Names;
+	typedef Vector< Bitname> Names;
 private:
 	DWORD val;
 
 	static const light::Str separator;
 	static Names names;
 public:
-	Flags(		): val( 0 ) {};
-	Flags( DWORD x	): val( x ) {};
+	Flags(		)		{}
+	Flags( DWORD x	): val( x )	{}
 	const char* c_str() const;
-	operator const char* () const { return c_str();	};
-	operator const DWORD () const { return val;	};
+	operator const char* () const { return c_str();	}
+	operator const DWORD () const { return val;	}
 	//void print( std::ostream& output ) const;
 };
 //inline std::istream& operator>>( std::istream& input, Flags& s ) { s.read( input ); return input; }	
@@ -264,12 +180,12 @@ public:
 	return a;													\
 }()
 
-#define IMAGE_SCN1( x)		{ { IMAGE_SCN_##x, IMAGE_SCN_##x, },	CONSTEXPR_TOLOWER1(#x) }
-#define IMAGE_SCN2( x, mask)	{ { IMAGE_SCN_##x, mask,	  },	CONSTEXPR_TOLOWER1(#x) }
+#define IMAGE_SCN1( x)		{ {IMAGE_SCN_##x, IMAGE_SCN_##x	}, CONSTEXPR_TOLOWER1(#x) }
+#define IMAGE_SCN2( x, mask)	{ {IMAGE_SCN_##x, mask		}, CONSTEXPR_TOLOWER1(#x) }
 
 constexpr int BEGIN__LINE__ = __LINE__;
 Flags::Names Flags::names =
-{ { IMAGE_SCN2( TYPE_REG,	Flags::Bits::allbits	) // 0x00000000  // Reserved.
+{ { IMAGE_SCN2( TYPE_REG,	Bits::allbits		) // 0x00000000  // Reserved.
   , IMAGE_SCN1( TYPE_DSECT				) // 0x00000001  // Reserved.
   , IMAGE_SCN1( TYPE_NOLOAD				) // 0x00000002  // Reserved.
   , IMAGE_SCN1( TYPE_GROUP				) // 0x00000004  // Reserved.
@@ -314,7 +230,7 @@ Flags::Names Flags::names =
   , IMAGE_SCN1( MEM_EXECUTE				)
   , IMAGE_SCN1( MEM_READ				)
   , IMAGE_SCN1( MEM_WRITE				)
-  , IMAGE_SCN2( SCALE_INDEX,	Flags::Bits::allbits	) // 0x00000001  // Tls index is scaled
+  , IMAGE_SCN2( SCALE_INDEX,	Bits::allbits		) // 0x00000001  // Tls index is scaled
   }
 // извратный способ посчитать длину ЗАПОЛНЕНОЙ части массива names
 , __LINE__ - BEGIN__LINE__ - 4
@@ -327,7 +243,7 @@ const light::Str Flags::separator( PS(" & ")-1 );
 const char *Flags::c_str() const
 {
 	// для значения в поле val ищем подходящие имена в names и складываем их в flag
-	light::vector< light::Str> flag;
+	Vector< light::Str> flag;
 	for( int i = names.size(); i > 0; )
 	{
 		--i;
@@ -363,8 +279,7 @@ const char *Flags::c_str() const
 	str += '\0';
 
 	// заносим в names, names у нас навроде кеша
-	names.resize( names.size() + 1 );
-	*names.back() = { { val, Bits::allbits}, str };
+	names.push_back( Bitname( Bits( val, Bits::allbits), str ) );
 
 	return str;
 }
@@ -475,9 +390,9 @@ enum
 , berkeley_val	= 3
 };
 
-Flags::Bits total_cond;
+Bits total_cond;
 const
-Flags::Bits ECRO = // exec_code_read_only
+Bits ECRO = // exec_code_read_only
 { IMAGE_SCN_MEM_EXECUTE | IMAGE_SCN_MEM_READ | IMAGE_SCN_CNT_CODE | 0				     | 0
 , IMAGE_SCN_MEM_EXECUTE | IMAGE_SCN_MEM_READ | IMAGE_SCN_CNT_CODE | IMAGE_SCN_CNT_UNINITIALIZED_DATA | IMAGE_SCN_MEM_WRITE
 };
@@ -524,13 +439,11 @@ void print_sysv( int argc, const char* argv[] )
 }
 
 //----------------------------------------------------------------
-struct Section_data { Flags flags; DWORD size[MAX_FILENAMES]; };
-// sections объявлен глобально чтоб его на халяву заполнили нулями
-light::map< Section_name, Section_data > sections;
-
-//----------------------------------------------------------------
 void print_berkeley( int argc, const char* argv[] )
 {
+	struct Section_data { Flags flags; DWORD size[MAX_FILENAMES]; };
+	Map< Section_name, Section_data > sections;
+
 	if( argc > MAX_FILENAMES )
 		FATALMSG( argv[ MAX_FILENAMES], "Too many files (must be <= " MAX_FILENAMES_S ")" );
 
