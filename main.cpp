@@ -1,7 +1,3 @@
-#define MAX_FILENAMES	50
-#define MAX_FILENAMES_S	"50"
-
-//----------------------------------------------------------------
 #include <stdio.h>
 #include <string.h>
 #include <stdint.h>
@@ -18,7 +14,7 @@
 //template <class Val		> using Vector	= std::vector< Val>;
 //template <class Key, class Value> using Map	= std::map< Key, Value>;
 
-template <class Val		> using Vector	= light::Vector< Val, 128>;
+template <class Val		> using Array	= light::Array< Val, 128>;
 template <class Key, class Value> using Map	= light::Map< Key, Value, 128>;
 
 
@@ -34,13 +30,6 @@ template <class Key, class Value> using Map	= light::Map< Key, Value, 128>;
 #define IMAGE_SCN_0x00002000		0x00002000  // Reserved.
 #define IMAGE_SCN_MEM_PROTECTED		0x00004000  // Obsolete
 #define IMAGE_SCN_MEM_SYSHEAP		0x00010000  // Obsolete
-
-//----------------------------------------------------------------
-#define FATAL(x) do { perror( x); exit( EXIT_FAILURE); } while (0)
-#define FATALMSG( file, errmsg) do { fprintf( stderr, "%s: " errmsg "\n", (file) ); exit( EXIT_FAILURE); } while (0)
-#define SIZE(x) (sizeof (x) / sizeof( *(x)))
-#define STRLEN(x) (sizeof (x) / sizeof( *(x)) - 1)
-#define PS(x) (x), SIZE(x)
 
 //----------------------------------------------------------------
 #pragma region // макросы для совместимости между unix и windows
@@ -149,7 +138,7 @@ struct Bitname
 //----------------------------------------------------------------
 struct Flags
 {
-	typedef Vector< Bitname> Names;
+	typedef Array< Bitname> Names;
 private:
 	DWORD val;
 
@@ -243,7 +232,7 @@ const light::Str Flags::separator( PS(" & ")-1 );
 const char *Flags::c_str() const
 {
 	// для значения в поле val ищем подходящие имена в names и складываем их в flag
-	Vector< light::Str> flag;
+	Array< light::Str> flag;
 	for( int i = names.size(); i > 0; )
 	{
 		--i;
@@ -441,11 +430,14 @@ void print_sysv( int argc, const char* argv[] )
 //----------------------------------------------------------------
 void print_berkeley( int argc, const char* argv[] )
 {
-	struct Section_data { Flags flags; DWORD size[MAX_FILENAMES]; };
-	Map< Section_name, Section_data > sections;
+	//struct Section_data { Flags flags; DWORD size[50]; };
+	struct Section_data
+	{
+		Flags flags;
+		light::Vector< DWORD> sizearray;
 
-	if( argc > MAX_FILENAMES )
-		FATALMSG( argv[ MAX_FILENAMES], "Too many files (must be <= " MAX_FILENAMES_S ")" );
+	};
+	Map< Section_name, Section_data > sections;
 
 	char buf[4096];
 	for( int i = 0; i < argc; i++ )
@@ -456,8 +448,13 @@ void print_berkeley( int argc, const char* argv[] )
 		for( size_t s = 0; s < NT_headers->FileHeader.NumberOfSections; s++ )
 		{
 			auto &r = sections[ section_header[s].name ];
-			r.size[i] = section_header[s].Misc.VirtualSize;
-			r.flags	  = section_header[s].characteristics;
+			if( !r.sizearray )
+			{
+				r.sizearray.resize( argc );
+				r.sizearray.fill( 0 );
+			}
+			r.sizearray[i]	= section_header[s].Misc.VirtualSize;
+			r.flags		= section_header[s].characteristics;
 		}
 	}
 
@@ -477,7 +474,7 @@ void print_berkeley( int argc, const char* argv[] )
 		size_t total_sum = 0;
 		for( auto& section : sections )
 		{
-			size_t s = section.second.size[i];
+			size_t s = section.second.sizearray[i];
 			if( total_cond == section.second.flags )
 				total_sum += s;
 			printf( fmt, s );
