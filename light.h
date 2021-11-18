@@ -24,24 +24,6 @@
 #	error "oops, I don't know this system"
 #endif
 
-//// constexpr string
-//class str_const
-//{
-//private:
-//	const char* const p_;
-//	const std::size_t  sz_;
-//public:
-//template<std::size_t N>
-//constexpr str_const( const char( &a )[N] ): p_( a ), sz_( N - 1 ) {}
-//
-//constexpr std::size_t size	(		) { return sz_;	}
-//constexpr char operator[]	( std::size_t n )
-//{
-//	return n < sz_	? p_[n]
-//			: throw std::out_of_range( "" );
-//}
-//};
-
 namespace light
 {
 
@@ -56,17 +38,19 @@ struct Vararray
 	using const_iterator	= typename const Val*;
 	using ValX = std::conditional_t<(sizeof( Val ) > 8), Val&, Val>;
 
-	Vararray(			): p( NULL		) {		}
-	Vararray( size_t* p, size_t sz	): p( (Val*)(p + 1)	) { *p = sz;	}
+	Vararray(					): p( NULL		) {			}
+	Vararray( size_t* p, size_t sz			): p( (Val*)(p + 1)	) { *p = sz;		}
+	Vararray( size_t* p, size_t sz, const ValX x	): p( (Val*)(p + 1)	) { *p = sz; fill( x);	}
 
 	size_t* psize	(		) const	{ return (size_t*)p - 1;				}
 const	size_t size	(		) const { return *psize();					}
 const	bool empty	(		) const	{ return !size();					}
 	void push_back	( const ValX x	)	{ p[(*psize())++]=x;					}
 	void resize	( size_t nsz	)	{ *psize() = nsz;					}
+	void fill	(		)	{ memset( begin(), 0, size() * sizeof( Val ) );		}
 	void fill	( const ValX x	)
 	{
-		Val* q = p;
+		Val* q = begin();
 		for( size_t i = size(); i > 0; )
 		{
 			--i;
@@ -89,7 +73,8 @@ const	ValX operator[]	( size_t i	) const { assert( i < size()			); return p[i]; 
 const	ValX operator[]	( ptrdiff_t i	) const { assert( i >= 0 && i < int( size() )	); return p[i]; }
 };
 
-#define ARRAY( Val, sz ) light::Vararray< Val>( (size_t*) ::alloca( sizeof( size_t) + sizeof( Val) * sz ), sz)
+#define  ARRAY( Val, sz		) light::Vararray< Val>( (size_t*) ::alloca( sizeof(size_t)+sizeof(Val)*sz ), sz)
+#define ARRAY0( Val, sz, filler	) light::Vararray< Val>( (size_t*) ::alloca( sizeof(size_t)+sizeof(Val)*sz ), sz, filler)
 
 //----------------------------------------------------------------
 template <class Val>
@@ -102,16 +87,10 @@ public:
 	using const_iterator	= typename const Val*;
 	using ValX = std::conditional_t<(sizeof( Val ) > 8), Val&, Val>;
 
-	static Val* alloc( const size_t sz )
-	{
-		size_t* p = (size_t*) ::malloc( sizeof( size_t ) + sz * sizeof( Val ) );
-		assert( p );
-		*p++ = sz;
-		return (Val*) p;
-	}
-       ~Vector(			)			{ if( p ) ::free( psize() );	}
-	Vector(			): base()		{				}
-	Vector( size_t sz	): base.p( alloc(sz) )	{				}
+       ~Vector(			)		{ if( p ) ::free( psize() );	}
+	Vector(			): base()	{				}
+	Vector( size_t sz	): base( (size_t*) ::malloc( sizeof( size_t ) + sizeof( Val ) * sz ), sz)
+						{ assert( p); fill();		}
 
 const	size_t max_size	(		) const { return (MSIZE(psize())-sizeof(size_t)) / sizeof(Val);	}
 const	bool is_full	(		) const	{ return size() >= max_size();				}
@@ -120,10 +99,12 @@ const	bool is_full	(		) const	{ return size() >= max_size();				}
 	{
 		if( !p )
 		{
-			p = alloc( nsz );
+			new( this) Vector( nsz );
 			return;
 		}
 		assert( nsz <= max_size() );
+		if( nsz > size() )
+			memset( end(), 0, (size() - nsz) * sizeof( Val ) );
 		*psize() = nsz;
 	}
 };
@@ -141,10 +122,8 @@ public:
 	using iterator		= typename	 Val*;
 	using const_iterator	= typename const Val*;
 
-	// Если я объявлю этот конструктор - пропадет возможность статической инициализации.
-	// Что делать?
-	//template <typename... ValX>
-	//Array( const ValX ...T ): a{ T... }, s( sizeof...(T) ) {}
+	template <typename... ValX>
+	constexpr Array( const ValX ...T	): a{ T... }, s( sizeof...(T) ) {}
 	//Array& operator=( std::initializer_list< ValX> list );
 const	size_t max_size	(		) const { return std::size(a);				}
 const	size_t size	(		) const { return s;					}
