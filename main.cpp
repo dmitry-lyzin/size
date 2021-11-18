@@ -107,9 +107,9 @@ struct Bitset
 	constexpr static const Val allbits = Val(0) - 1; // 0xFFFFFFFF
 	static_assert( allbits > Val( 0), "Val must be unsigned!");
 
-	Bitset(			)			{}
-	Bitset( Val x		): val( x ), mask( x )	{}
-	Bitset( Val x, Val m	): val( x ), mask( m )	{}
+	constexpr Bitset(		): val(   ), mask(   )	{}
+	constexpr Bitset( Val x		): val( x ), mask( x )	{}
+	constexpr Bitset( Val x, Val m	): val( x ), mask( m )	{}
 
 	bool	full	   (			) const { return mask == allbits;	};
 	bool	operator ==( const Val x	) const { return (x & mask) == val;	};
@@ -128,11 +128,11 @@ typedef Bitset< DWORD> Bits;
 //----------------------------------------------------------------
 struct Bitname
 {
-	Bits bits;
-	const char* name;
-	Bitname(					)				  {}
-	Bitname( const Bits& bits_, const char* name_	): bits( bits_	), name( name_	) {}
-	Bitname( const Bitname& r			): bits( r.bits	), name( r.name ) {}
+		Bits bits;
+		const char* name;
+constexpr	Bitname(					): bits(	), name(	) {}
+constexpr	Bitname( const Bits& bits_, const char* name_	): bits( bits_	), name( name_	) {}
+constexpr	Bitname( const Bitname& r			): bits( r.bits	), name( r.name ) {}
 };
 
 //----------------------------------------------------------------
@@ -169,60 +169,58 @@ public:
 	return a;													\
 }()
 
-#define IMAGE_SCN1( x)		{ {IMAGE_SCN_##x, IMAGE_SCN_##x	}, CONSTEXPR_TOLOWER1(#x) }
-#define IMAGE_SCN2( x, mask)	{ {IMAGE_SCN_##x, mask		}, CONSTEXPR_TOLOWER1(#x) }
+//#define IMAGE_SCN1( x)		Bitname( Bits( IMAGE_SCN_##x		), CONSTEXPR_TOLOWER(#x) )
+//#define IMAGE_SCN2( x, mask)	Bitname( Bits( IMAGE_SCN_##x, mask	), CONSTEXPR_TOLOWER(#x) )
+#define IMAGE_SCN1( x)		Bitname( Bits( IMAGE_SCN_##x		), #x )
+#define IMAGE_SCN2( x, mask)	Bitname( Bits( IMAGE_SCN_##x, mask	), #x )
 
-constexpr int BEGIN__LINE__ = __LINE__;
 Flags::Names Flags::names =
-{ { IMAGE_SCN2( TYPE_REG,	Bits::allbits		) // 0x00000000  // Reserved.
-  , IMAGE_SCN1( TYPE_DSECT				) // 0x00000001  // Reserved.
-  , IMAGE_SCN1( TYPE_NOLOAD				) // 0x00000002  // Reserved.
-  , IMAGE_SCN1( TYPE_GROUP				) // 0x00000004  // Reserved.
-  , IMAGE_SCN1( TYPE_NO_PAD				) // 0x00000008  // Reserved.
-  , IMAGE_SCN1( TYPE_COPY				) // 0x00000010  // Reserved.
-  , IMAGE_SCN1( CNT_CODE				)
-  , IMAGE_SCN1( CNT_INITIALIZED_DATA			)
-  , IMAGE_SCN1( CNT_UNINITIALIZED_DATA			)
-  , IMAGE_SCN1( LNK_OTHER				) // 0x00000100  // Reserved.
-  , IMAGE_SCN1( LNK_INFO				)
-  , IMAGE_SCN1( TYPE_OVER				) // 0x00000400  // Reserved.
-  , IMAGE_SCN1( LNK_REMOVE				)
-  , IMAGE_SCN1( LNK_COMDAT				)
-  , IMAGE_SCN1( 0x00002000				) // 0x00002000  // Reserved.
-  , IMAGE_SCN1( MEM_PROTECTED				) // 0x00004000  // Obsolete
-  , IMAGE_SCN1( NO_DEFER_SPEC_EXC			)
-  , IMAGE_SCN1( GPREL					)
-  , IMAGE_SCN1( MEM_FARDATA				)
-  , IMAGE_SCN1( MEM_SYSHEAP				) // 0x00010000  // Obsolete
-  , IMAGE_SCN1( MEM_PURGEABLE				)
-  , IMAGE_SCN1( MEM_16BIT				)
-  , IMAGE_SCN1( MEM_LOCKED				)
-  , IMAGE_SCN1( MEM_PRELOAD				)
-  , IMAGE_SCN2( ALIGN_2BYTES,	IMAGE_SCN_ALIGN_MASK	)
-  , IMAGE_SCN2( ALIGN_4BYTES,	IMAGE_SCN_ALIGN_MASK	)
-  , IMAGE_SCN2( ALIGN_8BYTES,	IMAGE_SCN_ALIGN_MASK	)
-  , IMAGE_SCN2( ALIGN_16BYTES,	IMAGE_SCN_ALIGN_MASK	)
-  , IMAGE_SCN2( ALIGN_32BYTES,	IMAGE_SCN_ALIGN_MASK	)
-  , IMAGE_SCN2( ALIGN_64BYTES,	IMAGE_SCN_ALIGN_MASK	)
-  , IMAGE_SCN2( ALIGN_128BYTES,	IMAGE_SCN_ALIGN_MASK	)
-  , IMAGE_SCN2( ALIGN_256BYTES,	IMAGE_SCN_ALIGN_MASK	)
-  , IMAGE_SCN2( ALIGN_512BYTES,	IMAGE_SCN_ALIGN_MASK	)
-  , IMAGE_SCN2( ALIGN_1024BYTES,IMAGE_SCN_ALIGN_MASK	)
-  , IMAGE_SCN2( ALIGN_2048BYTES,IMAGE_SCN_ALIGN_MASK	)
-  , IMAGE_SCN2( ALIGN_4096BYTES,IMAGE_SCN_ALIGN_MASK	)
-  , IMAGE_SCN2( ALIGN_8192BYTES,IMAGE_SCN_ALIGN_MASK	)
-  , IMAGE_SCN1( LNK_NRELOC_OVFL				)
-  , IMAGE_SCN1( MEM_DISCARDABLE				)
-  , IMAGE_SCN1( MEM_NOT_CACHED				)
-  , IMAGE_SCN1( MEM_NOT_PAGED				)
-  , IMAGE_SCN1( MEM_SHARED				)
-  , IMAGE_SCN1( MEM_EXECUTE				)
-  , IMAGE_SCN1( MEM_READ				)
-  , IMAGE_SCN1( MEM_WRITE				)
-  , IMAGE_SCN2( SCALE_INDEX,	Bits::allbits		) // 0x00000001  // Tls index is scaled
-  }
-// извратный способ посчитать длину ЗАПОЛНЕНОЙ части массива names
-, __LINE__ - BEGIN__LINE__ - 4
+{ IMAGE_SCN2( TYPE_REG		, Bits::allbits		) // 0x00000000  // Reserved.
+, IMAGE_SCN1( TYPE_DSECT				) // 0x00000001  // Reserved.
+, IMAGE_SCN1( TYPE_NOLOAD				) // 0x00000002  // Reserved.
+, IMAGE_SCN1( TYPE_GROUP				) // 0x00000004  // Reserved.
+, IMAGE_SCN1( TYPE_NO_PAD				) // 0x00000008  // Reserved.
+, IMAGE_SCN1( TYPE_COPY					) // 0x00000010  // Reserved.
+, IMAGE_SCN1( CNT_CODE					)
+, IMAGE_SCN1( CNT_INITIALIZED_DATA			)
+, IMAGE_SCN1( CNT_UNINITIALIZED_DATA			)
+, IMAGE_SCN1( LNK_OTHER					) // 0x00000100  // Reserved.
+, IMAGE_SCN1( LNK_INFO					)
+, IMAGE_SCN1( TYPE_OVER					) // 0x00000400  // Reserved.
+, IMAGE_SCN1( LNK_REMOVE				)
+, IMAGE_SCN1( LNK_COMDAT				)
+, IMAGE_SCN1( 0x00002000				) // 0x00002000  // Reserved.
+, IMAGE_SCN1( MEM_PROTECTED				) // 0x00004000  // Obsolete
+, IMAGE_SCN1( NO_DEFER_SPEC_EXC				)
+, IMAGE_SCN1( GPREL					)
+, IMAGE_SCN1( MEM_FARDATA				)
+, IMAGE_SCN1( MEM_SYSHEAP				) // 0x00010000  // Obsolete
+, IMAGE_SCN1( MEM_PURGEABLE				)
+, IMAGE_SCN1( MEM_16BIT					)
+, IMAGE_SCN1( MEM_LOCKED				)
+, IMAGE_SCN1( MEM_PRELOAD				)
+, IMAGE_SCN2( ALIGN_2BYTES	, IMAGE_SCN_ALIGN_MASK	)
+, IMAGE_SCN2( ALIGN_4BYTES	, IMAGE_SCN_ALIGN_MASK	)
+, IMAGE_SCN2( ALIGN_8BYTES	, IMAGE_SCN_ALIGN_MASK	)
+, IMAGE_SCN2( ALIGN_16BYTES	, IMAGE_SCN_ALIGN_MASK	)
+, IMAGE_SCN2( ALIGN_32BYTES	, IMAGE_SCN_ALIGN_MASK	)
+, IMAGE_SCN2( ALIGN_64BYTES	, IMAGE_SCN_ALIGN_MASK	)
+, IMAGE_SCN2( ALIGN_128BYTES	, IMAGE_SCN_ALIGN_MASK	)
+, IMAGE_SCN2( ALIGN_256BYTES	, IMAGE_SCN_ALIGN_MASK	)
+, IMAGE_SCN2( ALIGN_512BYTES	, IMAGE_SCN_ALIGN_MASK	)
+, IMAGE_SCN2( ALIGN_1024BYTES	, IMAGE_SCN_ALIGN_MASK	)
+, IMAGE_SCN2( ALIGN_2048BYTES	, IMAGE_SCN_ALIGN_MASK	)
+, IMAGE_SCN2( ALIGN_4096BYTES	, IMAGE_SCN_ALIGN_MASK	)
+, IMAGE_SCN2( ALIGN_8192BYTES	, IMAGE_SCN_ALIGN_MASK	)
+, IMAGE_SCN1( LNK_NRELOC_OVFL				)
+, IMAGE_SCN1( MEM_DISCARDABLE				)
+, IMAGE_SCN1( MEM_NOT_CACHED				)
+, IMAGE_SCN1( MEM_NOT_PAGED				)
+, IMAGE_SCN1( MEM_SHARED				)
+, IMAGE_SCN1( MEM_EXECUTE				)
+, IMAGE_SCN1( MEM_READ					)
+, IMAGE_SCN1( MEM_WRITE					)
+, IMAGE_SCN2( SCALE_INDEX	, Bits::allbits		) // 0x00000001  // Tls index is scaled
 };
 
 //----------------------------------------------------------------
@@ -368,8 +366,8 @@ const char* const outfmt[][3] =
   , "TOTAL              % 10u          % 10u\n"
   , "TOTAL                % 8X            % 8X\n"
   }
-, { "%9.8s"	, "%9.8s"	, "%9.8s"	} // berkeley_head
-, { "% 9o"	, "% 9u"	, "% 9X"	} // berkeley_val
+, { "%11.8s"	, "%10.8s"	, "%8.8s"	} // berkeley_head
+, { "% 11o"	, "% 10u"	, "% 8X"	} // berkeley_val
 };
 
 enum
@@ -449,10 +447,7 @@ void print_berkeley( int argc, const char* argv[] )
 		{
 			auto &r = sections[ section_header[s].name ];
 			if( !r.sizearray )
-			{
 				r.sizearray.resize( argc );
-				r.sizearray.fill( 0 );
-			}
 			r.sizearray[i]	= section_header[s].Misc.VirtualSize;
 			r.flags		= section_header[s].characteristics;
 		}
@@ -461,18 +456,18 @@ void print_berkeley( int argc, const char* argv[] )
 	// печатаем заголовок таблицы
 	const char*
 	fmt = outfmt[ berkeley_head ][radix];
-	for( auto& section : sections )
+	for( const auto& section : sections )
 		printf( fmt, section.first.c_str() );
 
-	printf	( total_cond	? "    TOTAL filename\n"
-			: " filename\n"
-		);
+	if( total_cond )
+		printf( fmt, "TOTAL" );
+	printf( " filename\n"	);
 	// печатаем таблицу
 	fmt = outfmt[ berkeley_val ][radix];
 	for( int i = 0; i < argc; i++ )
 	{
 		size_t total_sum = 0;
-		for( auto& section : sections )
+		for( const auto& section : sections )
 		{
 			size_t s = section.second.sizearray[i];
 			if( total_cond == section.second.flags )
@@ -486,7 +481,7 @@ void print_berkeley( int argc, const char* argv[] )
 	if( total_cond )
 	{
 		printf( "\nTOTAL sections:" );
-		for( auto& section : sections )
+		for( const auto& section : sections )
 		{
 			if( total_cond == section.second.flags )
 				printf( " %.8s", section.first.c_str() );
